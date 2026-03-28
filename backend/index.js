@@ -3,6 +3,7 @@ import express, { urlencoded } from "express"
 import dotenv from "dotenv"
 import {Router} from "express"
 import userRouter from "./src/routers/userRouter.js"
+import validate_auth from "./src/controllers/auth.controller.js"
 dotenv.config();
 const app=express();
 const port =8080;
@@ -19,8 +20,13 @@ main();
 app.listen(port,()=>{
     console.log("listning at port 8080");
 })
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/user",userRouter);
+app.use("/auth/",validate_auth);
+app.get("/auth/",(req,res)=>{
+    res.send("sucessful")
+})
 app.get("/",(req,res)=>{
     res.send("it is working");
 })

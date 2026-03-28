@@ -1,36 +1,42 @@
 import {User_Model} from "../model/user.model.js"
+import jwt from "jsonwebtoken"
+import bcrypt from "bcrypt"
 const login=async(req,res)=>{
     try{
         const {username,password}=req.body;
-    if(!username || !password)return res.send("incomplete information");
-    const user=await User_Model.findOne({username:username});
-    if(!user || user.password!=password)return res.send(" Incorrect credentials");
-    return res.send("login successful");
-    
+        if(!username || !password)return res.send("incomplete information");
+        const user=await User_Model.findOne({username:username});
+        if(!user){
+            return res.send(" Incorrect credentials 1",user);
+        }
+        const match= await bcrypt.compare(password,user.password);
+        if(!match)return res.send(" Incorrect credentials 2");
+        const token=jwt.sign({id:user._id,username:user.username},process.env.jwt_key,{expiresIn: '1h'});
+        res.status(201).json({ token});
     }
     catch(e){
         console.log(e);
         res.send(e);
     }
 }
-export {login}
 const register=async(req,res)=>{
     try{const {username,password}=req.body;
     if(!username || !password)return res.send(" insufficient info");
     const user= await User_Model.findOne({username:username});
     console.log(user);
     if(user)return res.send(`username already exists ${user}`);
+    const hashed_password=await bcrypt.hash(password,10);
     const newuser= new User_Model({
-        username:username,
-        password:password
+        username:username.toLowerCase(),
+        password:hashed_password,
     })
     await newuser.save();
     console.log("user saved");
-    res.send("usersaved");
+    res.status(200).json({message:"user register now redirect to login page"});
     }   
     catch(e){
-        console.log("something went wrong");
+        console.log("something went wrong regirect to login page ",e);
     }
     
 }
-export {register}
+export {register,login}
