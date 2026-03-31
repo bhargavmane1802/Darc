@@ -1,7 +1,7 @@
 import mongoose from "mongoose"
 const journal_Schema=new mongoose.Schema({
-    author:{type:mongoose.Schema.Types.ObjectId,ref:"User"},
-    room:{type:mongoose.Schema.Types.ObjectId,ref:"Room"},
+    author:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},
+    room:{type:mongoose.Schema.Types.ObjectId,ref:"Room",required:true},
     content:{type:String},
     reaction:[{type:String}],//emojie
     aiResponse:{type:String}
