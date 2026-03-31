@@ -11,7 +11,7 @@ const login=async(req,res)=>{
         }
         const match= await bcrypt.compare(password,user.password);
         if(!match)return res.send(" Incorrect credentials 2");
-        const token=jwt.sign({id:user._id,username:user.username},process.env.Jwt_key,{expiresIn: '1h'});
+        const token=jwt.sign({id:user._id,username:user.username},process.env.Jwt_Key,{expiresIn: '1h'});
         res.status(201).json({ token});
     }
     catch(e){
