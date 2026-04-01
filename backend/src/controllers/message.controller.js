@@ -26,6 +26,7 @@ const messageUpdate = async (req, res, next) => {
         const message = await message_Model.findOne({ _id: messageId, sender: id });
         if (!message) return res.status(403).json({ message: "the does not exists or u are not the sender" });
         const { content, type } = req.body;
+        if(!content && !type)return res.status(400).json({message:"empty fields "});
         if (content) message.content = content;
         if (type) message.type = type;
         await message.save();
@@ -40,10 +41,10 @@ const messageDelete = async (req, res, next) => {
         const { id } = req.user;
         const { roomId, messageId } = req.params;
         const message = await message_Model.findOne({ _id: messageId, sender: id });
-        if (!message) return res.status(403).json({ message: "the does not exists or u are not the sender" });
+        if (!message) return res.status(403).json({ message: "the message does not exists or u are not the sender" });
         const response = await message_Model.deleteOne({ _id: messageId });
         console.log(response);
-        res.status(201).json({ message: "message updated" });
+        res.status(201).json({ message: "message deleted" });
     }
     catch (err) {
         next(err);
@@ -63,4 +64,19 @@ const messageDelete = async (req, res, next) => {
 //         next(err);
 //     }
 // }
-export { messageCreate, messageUpdate, messageDelete };
+const messageDisplay=async (req,res,next)=>{
+    try{
+        const {roomId}=req.params;
+        const messages=await message_Model.find({room:roomId});
+        const messageContent= messages.map((entry)=>{
+            return entry.content;
+
+        })
+        return res.send(messageContent);
+    }
+    catch(err){
+        return next(err);
+    }
+
+}
+export { messageCreate, messageUpdate, messageDelete ,messageDisplay};

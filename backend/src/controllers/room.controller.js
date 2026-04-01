@@ -3,7 +3,9 @@ import { nanoid } from "nanoid";
 const create = async (req, res, next) => {
     try {
         const { name, description, isPrivate } = req.body;
-        if (!name || typeof isPrivate !== "boolean") return res.status(400).json({ message: "incomplete information" });
+        // console.log(typeof isPrivate);
+        //issue in setting private 
+        if (!name) return res.status(400).json({ message: "incomplete information" });
         const roomExist = await room_Model.findOne({ name: name });
         if (roomExist) return res.status(405).json({ message: "room already exists" });
         const { id } = req.user;
@@ -11,7 +13,7 @@ const create = async (req, res, next) => {
             name: name,
             owner: id,
             description: description,
-            isPrivate: isPrivate,
+            isPrivate: false,
             inviteCode: nanoid(10),
         })
         room.members.push(id);
