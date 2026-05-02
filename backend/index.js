@@ -7,8 +7,12 @@ import { user_Model } from "./src/model/user.model.js"
 import { journalRoutes } from "./src/routers/journal.Router.js"
 import { messageRoutes } from "./src/routers/message.Router.js"
 import { roomRoutes } from "./src/routers/room.Router.js"
+import http from "http"
+import {initSocket} from "./src/sockets/socket.js"
 dotenv.config();
 const app = express();
+const server =http.createServer(app);
+initSocket(server);
 const port = 8080;
 const main = async () => {
     try {
@@ -20,11 +24,11 @@ const main = async () => {
     }
 }
 main();
-app.listen(port, () => {
-    console.log("listning at port 8080");
-})
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+server.listen(port, () => {
+    console.log("listning at port 8080");
+})
 app.use("/user", userRoutes);
 app.use("/auth/", validate_auth);
 app.use("/auth/room", roomRoutes);
