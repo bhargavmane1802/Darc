@@ -15,8 +15,8 @@ const messageCreate = async (req, res, next) => {
         });
         await message.save();
         await message.populate("sender","username");
-        const io=getIO();
-        io.to(roomId).emit("create_message",message);
+        const io = getIO();
+        io.to(roomId).emit("message_new", message);
         return res.status(200).json({ message: "meggage created" });
     }
     catch (err) {
@@ -51,7 +51,7 @@ const messageDelete = async (req, res, next) => {
         const response = await message_Model.deleteOne({ _id: messageId });
         console.log(response);
         const io=getIO();
-        io.to(roomId).emit("delete_message",message);
+        io.to(roomId).emit("delete_message",message._id);
         res.status(201).json({ message: "message deleted" });
     }
     catch (err) {

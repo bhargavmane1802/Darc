@@ -64,7 +64,7 @@ const deleteEntries = async (req, res, next) => {
         if (!journal) return res.status(403).json({ message: "the message does not exists or u are not the sender" });
         const response = await journal_Model.deleteOne({ _id: journalId });
         console.log(response);
-        io.to(roomId).emit("delete_journal",{journal});
+        io.to(roomId).emit("delete_journal",{entry_id:journalId});
         res.status(201).json({ message: "journal deleted" });
     }
     catch (err) {
