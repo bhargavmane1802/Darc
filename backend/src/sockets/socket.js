@@ -3,7 +3,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import message_Model from "../model/message.model.js";
 import room_Model from "../model/room.model.js"
-import redis from "./config/redis.js";
+import redis from "../config/redis.js";
 let io;
 export const initSocket = (server) => {
   io = new Server(server, {
