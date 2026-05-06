@@ -1,10 +1,11 @@
 import message_Model from "../model/message.model.js";
+import {getIO} from "../sockets/socket.js"
 const messageCreate = async (req, res, next) => {
     try {
         const { id } = req.user;
         const { roomId } = req.params;
         let { content, type } = req.body;
-        if (!content) return res.status(401).json({ message: "insufficient content" });
+        if (!content) return res.status(400).json({ message: "insufficient content" });
         if (!type) type = "NA"
         const message = new message_Model({
             sender: id,
@@ -13,7 +14,10 @@ const messageCreate = async (req, res, next) => {
             type: type
         });
         await message.save();
-        return res.status(200).json({ messasge: "meggage created" });
+        await message.populate("sender","username");
+        const io=getIO();
+        io.to(roomId).emit("create_message",message);
+        return res.status(200).json({ message: "meggage created" });
     }
     catch (err) {
         next(err);
@@ -30,6 +34,8 @@ const messageUpdate = async (req, res, next) => {
         if (content) message.content = content;
         if (type) message.type = type;
         await message.save();
+        const io=getIO();
+        io.to(roomId).emit("update_message",message);
         res.status(201).json({ message: "message updated" });
     }
     catch (err) {
@@ -44,6 +50,8 @@ const messageDelete = async (req, res, next) => {
         if (!message) return res.status(403).json({ message: "the message does not exists or u are not the sender" });
         const response = await message_Model.deleteOne({ _id: messageId });
         console.log(response);
+        const io=getIO();
+        io.to(roomId).emit("delete_message",message);
         res.status(201).json({ message: "message deleted" });
     }
     catch (err) {
@@ -67,12 +75,8 @@ const messageDelete = async (req, res, next) => {
 const messageDisplay=async (req,res,next)=>{
     try{
         const {roomId}=req.params;
-        const messages=await message_Model.find({room:roomId});
-        const messageContent= messages.map((entry)=>{
-            return entry.content;
-
-        })
-        return res.send(messageContent);
+        const message=await message_Model.find({room:roomId}).populate("sender","username");
+        return res.send(message);
     }
     catch(err){
         return next(err);

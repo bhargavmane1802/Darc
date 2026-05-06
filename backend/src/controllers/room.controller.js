@@ -18,7 +18,7 @@ const create = async (req, res, next) => {
         })
         room.members.push(id);
         await room.save();
-        return res.status(200).json({ message: "room created" });
+        return res.status(200).json({ message: "room created",room_id:room._id });
     }
     catch (err) {
         console.log("room creation failed");
@@ -36,7 +36,7 @@ const join = async (req, res, next) => {
         if (room.members.some(member => member.equals(id))) return res.status(405).json({ message: `${username} already exists` });
         room.members.push(id);
         await room.save();
-        return res.status(404).json({ message: `${username} joined the room` });
+        return res.status(204).json({ message: `${username} joined the room`,room_id:room._id});
     }
     catch (err) {
         res.status(400).json({ message: err })
