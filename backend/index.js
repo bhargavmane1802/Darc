@@ -8,10 +8,10 @@ import { journalRoutes } from "./src/routers/journal.Router.js"
 import { messageRoutes } from "./src/routers/message.Router.js"
 import { roomRoutes } from "./src/routers/room.Router.js"
 import http from "http"
-import {initSocket} from "./src/sockets/socket.js"
+import { initSocket } from "./src/sockets/socket.js"
 dotenv.config();
 const app = express();
-const server =http.createServer(app);
+const server = http.createServer(app);
 initSocket(server);
 const port = 8080;
 const main = async () => {

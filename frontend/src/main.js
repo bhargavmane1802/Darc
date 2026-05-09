@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 // connect to your backend
-const token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5Y2Q1MWE4ZjRmMzgxMzgzZjM1OWNhYSIsInVzZXJuYW1lIjoieWFzaCIsImlhdCI6MTc3NzkwNTM3OCwiZXhwIjoxNzc3OTA4OTc4fQ.ETXTUrfBGLa2h-3CEFFsbM0-D3qMHRlmpotcaWQJFdo";
+const token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5Y2Q1MWE4ZjRmMzgxMzgzZjM1OWNhYSIsInVzZXJuYW1lIjoieWFzaCIsImlhdCI6MTc3ODA5OTkxOSwiZXhwIjoxNzc4MTAzNTE5fQ.tRdKdL_hnwrdZBLKKx6VITBN6ZlPSv2awkLRObw9YDo";
 const socket = io("http://localhost:8080", 
   {auth:
     {token: token}
@@ -32,7 +32,7 @@ socket.emit("message_send",{room_id:"69cd4bbb89fa0be42b0ffb6e",content: "he hee 
 
 //some one sent a new message
 socket.on("message_new",(newMessage)=>{
-  console.log(`new message recived from ${newMessage.username}`);
+  console.log(`new message recived from ${newMessage.sender.username}`);
   console.log(newMessage.content);
 })
 

@@ -1,6 +1,8 @@
 import room_Model from "../model/room.model.js";
 import journal_Model from "../model/journal.model.js";
 import {getIO} from "../sockets/socket.js"
+import { getAIFeedback } from "../services/ai.service.js";
+
 const createEntries = async (req, res, next) => {
     try {
         const { roomId } = req.params;
@@ -71,4 +73,52 @@ const deleteEntries = async (req, res, next) => {
         next(err);
     }
 }
-export { createEntries, displayEntries,updateEntries,deleteEntries };
+const aiResponces=async(req,res,next)=>{
+    try{
+        const {id}=req.user;
+        const {roomId,journalId}=req.params;
+
+        // 1. Setup SSE Headers headers needed for stream
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.flushHeaders(); // Send headers immediately
+
+        const entry=await journal_Model.findOne({_id:journalId});
+        if (!entry) {
+            res.write(`data: ${JSON.stringify({ error: "entry not found " })}\n\n`);
+res.end();
+return;
+        }
+        const pastEntry=(await journal_Model.find({ room:roomId,author:entry.author}).sort({createdAt:-1}).limit(5));
+        const stream=await getAIFeedback(entry.content,pastEntry);
+
+        //this is how stream flow works
+        let fullResponse = "";
+
+        // 2. Iterate through the stream chunks
+        for await (const chunk of stream) {
+        const chunkText = chunk.text();
+        fullResponse += chunkText;
+
+        // SSE format requires "data: " prefix and double newline
+        res.write(`data: ${JSON.stringify({ token: chunkText })}\n\n`);
+        }
+
+        // 3. Save the full accumulated string to MongoDB
+        entry.aiResponse = fullResponse;
+        await entry.save();
+
+        // 4. Signal completion
+        res.write(`data: ${JSON.stringify({ token: "[DONE]" })}\n\n`);
+        res.end();
+
+    }
+    catch(err){
+        console.error("Streaming Error:", err);
+        res.write(`data: ${JSON.stringify({ error: "Stream failed" })}\n\n`);
+        res.end();
+    }
+}
+
+export { createEntries, displayEntries,updateEntries,deleteEntries,aiResponces};
