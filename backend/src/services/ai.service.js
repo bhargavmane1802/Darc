@@ -33,3 +33,25 @@ export const getAIFeedback = async (entryContent, pastEntries) => {
     throw new Error("Failed to generate AI feedback");
   }
 };
+
+export const generateRoomDigest = async (entries) => {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+
+  const entryText = entries.map(e => `- ${e.content}`).join("\n");
+
+  const prompt = `
+    You are a technical project manager. Below is a list of journal entries 
+    from a development team for today. 
+    
+    ENTRIES:
+    ${entryText}
+    
+    TASK:
+    Create a 3-sentence "Daily Standup Summary". 
+    Focus on: What was accomplished and what are the common blockers? 
+    Keep it concise and professional.
+  `;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+};

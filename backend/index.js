@@ -9,6 +9,7 @@ import { messageRoutes } from "./src/routers/message.Router.js"
 import { roomRoutes } from "./src/routers/room.Router.js"
 import http from "http"
 import { initSocket } from "./src/sockets/socket.js"
+import startDigestJob from "./src/jobs/digest.job.js"
 dotenv.config();
 const app = express();
 const server = http.createServer(app);
@@ -47,7 +48,9 @@ app.get("/auth/", async (req, res) => {
         return res.status(404).json({ message: "usernot found", e });
     }
 })
-app.get("/", (req, res) => {
+app.get("/test", async(req, res) => {
+    //just for testing porpose move to main after words
+    await startDigestJob();
     return res.send("it is working");
 })
 app.use("/", (err, req, res, next) => {

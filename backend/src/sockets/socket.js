@@ -37,7 +37,7 @@ export const initSocket = (server) => {
     socket.on("join_room",async({room_id})=>{
       try {
         socket.join(room_id);
-
+        
         const roomKey = `room:${room_id}:presence`;
         const memberData = JSON.stringify({ id: user.id, username: user.username });
 

@@ -16,7 +16,7 @@ const User_Schema=new mongoose.Schema({
         type:String
     },
     status:{
-        type:Boolean,
+        type:String,
         default:false,
     }
 })
