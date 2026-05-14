@@ -64,7 +64,7 @@ const startDigestJob = () => {
     const limit = pLimit(3);
 
     // Runs every minute for testing. Change to "0 0 * * *" for Midnight.
-    cron.schedule("*/10 * * * *", async () => {
+    cron.schedule("*/1 * * * *", async () => {
         console.log("Running Daily Digest Job...");
 
         try {

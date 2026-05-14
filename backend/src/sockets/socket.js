@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import message_Model from "../model/message.model.js";
 import room_Model from "../model/room.model.js"
 import redis from "../config/redis.js";
+import readReceipt_Model from "../model/readReceipt.model.js";
 let io;
 export const initSocket = (server) => {
   io = new Server(server, {
@@ -103,6 +104,33 @@ export const initSocket = (server) => {
         id: socket.user.id
       });
     })
+  
+    socket.on("read_message", async (room_id, message_id) => {
+    try {
+        const userId = socket.user.id;
+        const update = await readReceipt_Model.findOneAndUpdate(
+            { 
+                room: room_id, 
+                user: userId,
+                $or: [
+                    { lastReadMessageId: { $lt: message_id } },
+                    { lastReadMessageId: { $exists: false } }
+                ]
+            },
+            { $set: { lastReadMessageId: message_id } },
+            { upsert: true, new: true }
+        );
+        if (update) {
+            socket.to(room_id).emit("readUpdate_message", {
+                room_id,
+                user_id: userId,
+                lastReadMessageId: message_id
+            });
+        }
+    } catch (err) {
+        console.error("Read Receipt Error:", err);
+    }
+});
 
     socket.on("disconnecting", async () => {
     // socket.rooms is a Set containing the socket ID and the rooms joined

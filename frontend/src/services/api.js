@@ -63,54 +63,67 @@ export const apiDeleteJournal = (roomId, journalId) =>
   request(`/auth/journal/${roomId}/delete/${journalId}`, { method: 'DELETE' });
 
 // AI Feedback (SSE) — path: /:roomId/aiResponce/:journalId
+// Updated Frontend Function
 export function streamAIFeedback(roomId, journalId, onToken, onDone, onError) {
   const token = localStorage.getItem('darc_token');
   const url = `${BASE}/auth/journal/${roomId}/aiResponce/${journalId}`;
 
-  // EventSource doesn't support custom headers, so we use fetch + ReadableStream
+  // 1. Create a controller to handle timeouts
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s client-side timeout
+
   fetch(url, {
     headers: { 'Authorization': `Bearer ${token}` },
+    signal: controller.signal // Link the abort signal to the fetch
   })
-    .then((res) => {
-      if (!res.ok) throw new Error('AI request failed');
+    .then(async (res) => {
+      clearTimeout(timeoutId); // Request started, clear the connection timeout
+      
+      if (!res.ok) throw new Error('AI request failed (Server Error)');
+      
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
-      function read() {
-        reader.read().then(({ done, value }) => {
+      async function read() {
+        try {
+          const { done, value } = await reader.read();
+          
           if (done) {
             onDone?.();
             return;
           }
+
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
-          buffer = lines.pop(); // keep incomplete line in buffer
+          buffer = lines.pop();
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.token === '[DONE]') {
-                  onDone?.();
-                  return;
-                } else if (data.error) {
-                  onError?.(data.error);
-                  return;
-                } else {
-                  onToken?.(data.token);
-                }
-              } catch {
-                // skip unparseable lines
+              const content = line.slice(6).trim();
+              if (content === '[DONE]') {
+                onDone?.();
+                return;
               }
+              const data = JSON.parse(content);
+              if (data.error) throw new Error(data.error);
+              onToken?.(data.token);
             }
           }
-          read();
-        });
+          read(); // Recursive call for next chunk
+        } catch (readError) {
+          // 2. Handle stream interruption (SSE connection drop)
+          console.error("Stream interrupted:", readError);
+          onError?.("AI response interrupted — please try again.");
+        }
       }
       read();
     })
     .catch((err) => {
-      onError?.(err.message || 'Stream connection failed');
+      if (err.name === 'AbortError') {
+        onError?.("Request timed out. The AI took too long to respond.");
+      } else {
+        onError?.(err.message || 'Stream connection failed');
+      }
     });
 }

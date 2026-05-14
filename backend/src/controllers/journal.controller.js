@@ -2,6 +2,7 @@ import room_Model from "../model/room.model.js";
 import journal_Model from "../model/journal.model.js";
 import {getIO} from "../sockets/socket.js"
 import { getAIFeedback } from "../services/ai.service.js";
+import message_Model from "../model/message.model.js";
 
 const createEntries = async (req, res, next) => {
     try {
@@ -120,5 +121,48 @@ return;
         res.end();
     }
 }
+const manageReaction=async(req,res,next)=>{
+    const{journalId}=req.params;
+    const {emoji}=req.body;
+    const userId=req.user_id;
+    try{
+        const entry = await journal_Model.findById(id);
+        if(!entry)return res.status(404).json({ message: "Entry not found" });
+        const reactionGroup=entry.reactions.find(r=> r.emoji===emoji);
+        if(reactionGroup){
+            const userIndex = reactionGroup.users.indexOf(userId);
+            if(userIndex>-1){
+                await journal_Model.updateOne(
+                { _id: id, "reactions.emoji": emoji },
+                { $pull: { "reactions.$.users": userId } }
+                );
+            }
+            else {
+                // User hasn't reacted -> ADD
+                await journal_Model.updateOne(
+                   { _id: id, "reactions.emoji": emoji },
+                    { $addToSet: { "reactions.$.users": userId } } 
+                );
+            }
+        }
+        else {
+            // Emoji group doesn't exist -> CREATE NEW GROUP
+            await journal_Model.findByIdAndUpdate(id, {
+                $push: { reactions: { emoji, users: [userId] } }
+            });
+        }
+        const updatedEntry = await journal_Model.findById(id).select("reactions");
+    
+        // BROADCAST via Socket
+        getIO().to(entry.room.toString()).emit("reaction_journal", {
+        entryId: id,
+        reactions: updatedEntry.reactions
+        });
 
-export { createEntries, displayEntries,updateEntries,deleteEntries,aiResponces};
+        res.json(updatedEntry.reactions);
+    }
+    catch(err){
+        res.status(500).json({ message: "Reaction failed" });
+    }
+}
+export { createEntries, displayEntries,updateEntries,deleteEntries,aiResponces,manageReaction};

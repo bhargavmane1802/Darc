@@ -4,6 +4,11 @@ const genAI = new GoogleGenerativeAI(process.env.Llm_Api_Key);
 
 // send a journal entry  and past 5 related entries . it will return a responce form ai
 export const getAIFeedback = async (entryContent, pastEntries) => {
+  const AI_TIMEOUT_MS = 30000; // 30 Seconds
+
+const timeoutPromise = () => new Promise((_, reject) => 
+    setTimeout(() => reject(new Error("AI_REQUEST_TIMEOUT")), AI_TIMEOUT_MS)
+);
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
@@ -25,10 +30,16 @@ export const getAIFeedback = async (entryContent, pastEntries) => {
       3. Keep the tone professional yet supportive (like a senior dev peer).
       4. Keep the response under 200 words.
     `;
-
-    const result = await model.generateContentStream([systemPrompt, entryContent]);
+    const result = await Promise.race([
+            model.generateContentStream([systemPrompt, entryContent]),
+            timeoutPromise()
+        ]);
     return result.stream;
   } catch (err) {
+    if (err.message === "AI_REQUEST_TIMEOUT") {
+            console.error(" AI Call timed out after 30s");
+            throw new Error("The AI is taking too long to respond. Please try again later.");
+        }
     console.error("AI Service Error:", err);
     throw new Error("Failed to generate AI feedback");
   }
