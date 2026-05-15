@@ -11,6 +11,7 @@ import http from "http"
 import { initSocket } from "./src/sockets/socket.js"
 import startDigestJob from "./src/jobs/digest.job.js"
 import uploadRouter from "./src/routers/upload.routes.js"
+import cors from "cors";
 dotenv.config();
 const app = express();
 const server = http.createServer(app);
@@ -19,7 +20,7 @@ const port = 8080;
 const main = async () => {
     try {
         await mongoose.connect(process.env.Mongo_Url);
-        console.log("DB conneccted");
+        console.log("DB connected");
     }
     catch (e) {
         console.log(e);
@@ -28,6 +29,50 @@ const main = async () => {
 main();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Allowed origins
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  process.env.CLIENT_URL
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+
+      // Allow requests with no origin
+      // (mobile apps, postman, curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error("CORS not allowed")
+      );
+    },
+
+    credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE"
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization"
+    ]
+  })
+);
+
 server.listen(port, () => {
     console.log("listning at port 8080");
 })
@@ -37,21 +82,8 @@ app.use("/auth/room", roomRoutes);
 app.use("/auth/journal", journalRoutes);
 app.use("/auth/message", messageRoutes);
 app.use("/auth/upload", uploadRouter);
-app.get("/auth/", async (req, res) => {
-    try {
-        console.log(req.user);
-        const { username, id } = req.user;
-        const user = await user_Model.findById({ _id: id });
-        console.log(user);
-        if (!user) return res.status(404).json({ message: "usernot found" });
-        return res.status(200).json({ message: user });
-    }
-    catch (e) {
-        return res.status(404).json({ message: "usernot found", e });
-    }
-})
 app.get("/test", async(req, res) => {
-    //just for testing porpose move to main after words
+    //just for testing porpose move to main after wards
     await startDigestJob();
     return res.send("it is working");
 })

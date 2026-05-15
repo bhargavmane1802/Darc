@@ -9,15 +9,12 @@ const User_Schema=new mongoose.Schema({
         type:String,
         required:true,
     },
-    token:{
-        type:String,
-    },
     avatar:{
         type:String
     },
     status:{
         type:String,
-        default:false,
+        default:null,
     }
 })
 const user_Model=mongoose.model("User",User_Schema);

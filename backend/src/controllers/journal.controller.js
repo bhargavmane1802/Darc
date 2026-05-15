@@ -8,12 +8,13 @@ const createEntries = async (req, res, next) => {
     try {
         const { roomId } = req.params;
         const { id } = req.user;
-        const {content} = req.body;
-        if (!id || !content) return res.status(400).json({ message: "insufficient information" });
+        const {content, imageUrl} = req.body;
+        if (!id || (!content && !imageUrl)) return res.status(400).json({ message: "insufficient information" });
         const journal = new journal_Model({
             author: id,
             room: roomId,
             content: content,
+            imageUrl: imageUrl || null,
         })
         await journal.save();
         await journal.populate("author", "username");

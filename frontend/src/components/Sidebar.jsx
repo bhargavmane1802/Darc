@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGetMyRooms } from '../services/api.js';
 
 export default function Sidebar({
-  user, rooms, setRooms, activeRoom, onSelectRoom, onLogout, onCreateRoom, onJoinRoom, onDeleteRoom,
+  user, rooms, setRooms, activeRoom, onSelectRoom, onLogout, onCreateRoom, onJoinRoom, onDeleteRoom, onLeaveRoom,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -85,6 +85,18 @@ export default function Sidebar({
                     🗑
                   </button>
                 )}
+                {!collapsed && !isOwner && onLeaveRoom && (
+                  <button
+                    className="sidebar__room-leave icon-btn icon-btn--sm icon-btn--warning"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLeaveRoom(r);
+                    }}
+                    title="Leave room"
+                  >
+                    🚪
+                  </button>
+                )}
               </div>
             );
           })
@@ -105,3 +117,4 @@ export default function Sidebar({
     </aside>
   );
 }
+

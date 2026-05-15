@@ -5,16 +5,19 @@ import {user_Model} from "../model/user.model.js";
 import journal_Model from "../model/journal.model.js";
 import { generateRoomDigest } from "../services/ai.service.js";
 import { getIO } from "../sockets/socket.js";
-
+import jwt from "jsonwebtoken"
+import bcrypt from "bcrypt"
 // Helper to get or create the "AI Bot" identity
 let botId = null;
 const getBotId = async () => {
     if (botId) return botId;
     let bot = await user_Model.findOne({ username: "AI Mentor" });
     if (!bot) {
+        const password= "system_generated_password";
+        const hashed_password = await bcrypt.hash(password, 10);
         bot = await user_Model.create({
             username: "AI Mentor",
-            password: "system_generated_password",
+            password: hashed_password,
             status: "bot"
         });
     }

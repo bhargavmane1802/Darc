@@ -17,7 +17,7 @@ const messageCreate = async (req, res, next) => {
         await message.populate("sender","username");
         const io = getIO();
         io.to(roomId).emit("message_new", message);
-        return res.status(200).json({ message: "meggage created" });
+        return res.status(200).json({ message: "message created" });
     }
     catch (err) {
         next(err);

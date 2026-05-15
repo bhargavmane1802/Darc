@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { apiGetJournals, apiCreateJournal, apiUpdateJournal, apiDeleteJournal, streamAIFeedback, apiToggleReaction } from '../services/api.js';
+import React, { useState, useEffect, useRef } from 'react';
+import { apiGetJournals, apiCreateJournal, apiUpdateJournal, apiDeleteJournal, streamAIFeedback, apiToggleReaction, apiUploadImage } from '../services/api.js';
 import { getSocket } from '../services/socket.js';
 import { useToast } from '../context/ToastContext.jsx';
 
@@ -14,6 +14,9 @@ export default function JournalPanel({ roomId, user }) {
   const [aiText, setAiText] = useState('');
   const [aiRemaining, setAiRemaining] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null); // { file, url }
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -58,16 +61,47 @@ export default function JournalPanel({ roomId, user }) {
   };
 
   const handleCreate = async () => {
-    if (!newContent.trim()) return;
+    if (!newContent.trim() && !imagePreview) return;
     setLoading(true);
     try {
-      await apiCreateJournal(roomId, newContent.trim());
+      let imageUrl = null;
+
+      // Upload image if attached
+      if (imagePreview) {
+        setUploading(true);
+        try {
+          const data = await apiUploadImage(imagePreview.file);
+          imageUrl = data.imageUrl;
+        } catch (err) {
+          console.error('Image upload failed:', err);
+          addToast('Image upload failed', 'error');
+          setUploading(false);
+          setLoading(false);
+          return;
+        }
+        setUploading(false);
+      }
+
+      await apiCreateJournal(roomId, newContent.trim(), imageUrl);
       setNewContent('');
+      cancelImagePreview();
     } catch (err) {
       addToast('Failed to create entry', 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImagePreview({ file, url: URL.createObjectURL(file) });
+    e.target.value = ''; // reset so same file can be selected again
+  };
+
+  const cancelImagePreview = () => {
+    if (imagePreview?.url) URL.revokeObjectURL(imagePreview.url);
+    setImagePreview(null);
   };
 
   const handleEditSave = async (id) => {
@@ -154,9 +188,35 @@ export default function JournalPanel({ roomId, user }) {
           onChange={(e) => setNewContent(e.target.value)}
           rows={3}
         />
-        <button className="btn btn--primary btn--sm" onClick={handleCreate} disabled={loading || !newContent.trim()}>
-          {loading ? <span className="spinner" /> : 'Post Entry'}
-        </button>
+
+        {/* Image Preview */}
+        {imagePreview && (
+          <div className="journal-panel__image-preview">
+            <img src={imagePreview.url} alt="Preview" />
+            <button className="journal-panel__image-preview-cancel" onClick={cancelImagePreview}>✕</button>
+          </div>
+        )}
+
+        <div className="journal-panel__compose-actions">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+          <button
+            className="btn btn--ghost btn--sm btn--upload"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach image (jpg, png, webp)"
+            disabled={uploading || loading}
+          >
+            📎 Image
+          </button>
+          <button className="btn btn--primary btn--sm" onClick={handleCreate} disabled={loading || uploading || (!newContent.trim() && !imagePreview)}>
+            {loading || uploading ? <span className="spinner" /> : 'Post Entry'}
+          </button>
+        </div>
       </div>
 
       {/* Entries */}
@@ -197,7 +257,14 @@ export default function JournalPanel({ roomId, user }) {
                     </div>
                   </div>
                 ) : (
-                  <p className="journal-entry__content">{renderContent(entry.content)}</p>
+                  <>
+                    {entry.imageUrl && (
+                      <div className="journal-entry__image">
+                        <img src={entry.imageUrl} alt="Journal attachment" loading="lazy" />
+                      </div>
+                    )}
+                    <p className="journal-entry__content">{renderContent(entry.content)}</p>
+                  </>
                 )}
 
                 {/* Reactions */}

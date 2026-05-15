@@ -58,6 +58,7 @@ const remove = async (req, res, next) => {
         next(err);
     }
 }
+
 const myRooms = async (req, res, next) => {
     try {
         const { id } = req.user;

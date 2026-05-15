@@ -108,6 +108,22 @@ export default function AppShell() {
     }
   };
 
+  // Leave room handler — permanently removes user from room members
+  const handleLeaveRoom = (room) => {
+    const confirmed = window.confirm(`Leave room "${room.name}"? You will need an invite code to rejoin.`);
+    if (!confirmed) return;
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('leave_room', room._id);
+    }
+    setRooms((prev) => prev.filter((r) => r._id !== room._id));
+    if (activeRoom?._id === room._id) {
+      setActiveRoom(null);
+      setMembers([]);
+    }
+    addToast(`Left room "${room.name}"`, 'success');
+  };
+
   // Copy invite code to clipboard
   const handleCopyInvite = () => {
     if (!activeRoom?.inviteCode) return;
@@ -132,6 +148,7 @@ export default function AppShell() {
         onCreateRoom={() => setShowModal('create')}
         onJoinRoom={() => setShowModal('join')}
         onDeleteRoom={handleDeleteRoom}
+        onLeaveRoom={handleLeaveRoom}
       />
 
       <main className="app-shell__main">

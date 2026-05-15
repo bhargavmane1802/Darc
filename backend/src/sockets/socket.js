@@ -34,21 +34,21 @@ export const initSocket = (server) => {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
     const user=socket.user;
+    
     // joins room 
     socket.on("join_room",async({room_id})=>{
       try {
         socket.join(room_id);
         
         const roomKey = `room:${room_id}:presence`;
-        const memberData = JSON.stringify({ id: user.id, username: user.username });
+        const memberData =user.id;
 
         // 1. Redis Operations
         await redis.sadd(roomKey, memberData);
         await redis.expire(roomKey, 86400);
 
         // 2. Fetch and Broadcast Members
-        const membersRaw = await redis.smembers(roomKey);
-        const members = membersRaw.map(m => JSON.parse(m));
+        const members = await redis.smembers(roomKey);
         io.to(room_id).emit("room_members", { room_id, members });
 
         // 3. Fetch History
@@ -59,11 +59,35 @@ export const initSocket = (server) => {
         
         socket.emit("message_display", history.reverse());
 
-    } catch (err) {
+    }catch (err) {
       console.error("Join Room Error:", err);
       socket.emit("error", { message: "Failed to join room properly." });
     }
     });
+    socket.on("leave_room",async(room_id)=>{
+      try{
+        await room_Model.updateOne(
+          {_id:room_id},
+          {
+            $pull:{
+              members:user.id
+            }
+          }
+        );
+        socket.leave(room_id);
+        const roomKey = `room:${room_id}:presence`;
+        const memberData = user.id;
+        await redis.srem(roomKey,memberData);
+        const members = await redis.smembers(roomKey);
+        io.to(room_id).emit("room_members", { room_id, members});
+      }
+      catch(err){
+        console.error("leave Room Error:", err);
+        socket.emit("error", { message: "Failed to leave room properly." });
+      }
+    });
+
+
     socket.on("message_send", async ({ room_id, content, imageUrl }) => {
       try {
         // 1. Server-side Validation
@@ -142,10 +166,9 @@ export const initSocket = (server) => {
           
           // Remove the user from the Redis Set
           // Note: Must match the exact string added in sadd
-          await redis.srem(roomKey, JSON.stringify({ id: user.id, username: user.username }));
+          await redis.srem(roomKey,user.id);
 
-          const membersRaw = await redis.smembers(roomKey);
-          const members = membersRaw.map(m => JSON.parse(m));
+          const members = await redis.smembers(roomKey);
 
           socket.to(room_id).emit("room_members", { room_id, members });
         } catch (err) {

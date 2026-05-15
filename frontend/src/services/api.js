@@ -53,8 +53,8 @@ export const apiDeleteMessage = (roomId, messageId) =>
 // Journal — paths match backend: /:roomId/create, /:roomId/display, /:roomId/update/:journalId, /:roomId/delete/:journalId
 export const apiGetJournals = (roomId) => request(`/auth/journal/${roomId}/display`);
 
-export const apiCreateJournal = (roomId, content) =>
-  request(`/auth/journal/${roomId}/create`, { method: 'POST', body: JSON.stringify({ content }) });
+export const apiCreateJournal = (roomId, content, imageUrl) =>
+  request(`/auth/journal/${roomId}/create`, { method: 'POST', body: JSON.stringify({ content, imageUrl }) });
 
 export const apiUpdateJournal = (roomId, journalId, content) =>
   request(`/auth/journal/${roomId}/update/${journalId}`, { method: 'PUT', body: JSON.stringify({ content }) });

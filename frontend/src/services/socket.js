@@ -18,10 +18,6 @@ export function connectSocket(token) {
     console.log('[Socket] Connected:', socket.id);
   });
 
-  socket.on('connect_error', (err) => {
-    console.error('[Socket] Connection error:', err.message);
-  });
-
   socket.on('disconnect', () => {
     console.log('[Socket] Disconnected');
   });
