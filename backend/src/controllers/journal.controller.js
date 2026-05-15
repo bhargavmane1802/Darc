@@ -67,6 +67,7 @@ const deleteEntries = async (req, res, next) => {
         if (!journal) return res.status(403).json({ message: "the message does not exists or u are not the sender" });
         const response = await journal_Model.deleteOne({ _id: journalId });
         console.log(response);
+        const io = getIO();
         io.to(roomId).emit("delete_journal",{entry_id:journalId});
         res.status(201).json({ message: "journal deleted" });
     }
@@ -124,42 +125,42 @@ return;
 const manageReaction=async(req,res,next)=>{
     const{journalId}=req.params;
     const {emoji}=req.body;
-    const userId=req.user_id;
+    const userId=req.user.id;
     try{
-        const entry = await journal_Model.findById(id);
+        const entry = await journal_Model.findById(journalId);
         if(!entry)return res.status(404).json({ message: "Entry not found" });
-        const reactionGroup=entry.reactions.find(r=> r.emoji===emoji);
+        const reactionGroup=entry.reaction.find(r=> r.emoji===emoji);
         if(reactionGroup){
             const userIndex = reactionGroup.users.indexOf(userId);
             if(userIndex>-1){
                 await journal_Model.updateOne(
-                { _id: id, "reactions.emoji": emoji },
-                { $pull: { "reactions.$.users": userId } }
+                { _id: journalId, "reaction.emoji": emoji },
+                { $pull: { "reaction.$.users": userId } }
                 );
             }
             else {
                 // User hasn't reacted -> ADD
                 await journal_Model.updateOne(
-                   { _id: id, "reactions.emoji": emoji },
-                    { $addToSet: { "reactions.$.users": userId } } 
+                   { _id: journalId, "reaction.emoji": emoji },
+                    { $addToSet: { "reaction.$.users": userId } } 
                 );
             }
         }
         else {
             // Emoji group doesn't exist -> CREATE NEW GROUP
-            await journal_Model.findByIdAndUpdate(id, {
-                $push: { reactions: { emoji, users: [userId] } }
+            await journal_Model.findByIdAndUpdate(journalId, {
+                $push: { reaction: { emoji, users: [userId] } }
             });
         }
-        const updatedEntry = await journal_Model.findById(id).select("reactions");
+        const updatedEntry = await journal_Model.findById(journalId).select("reaction");
     
         // BROADCAST via Socket
         getIO().to(entry.room.toString()).emit("reaction_journal", {
-        entryId: id,
-        reactions: updatedEntry.reactions
+        entryId: journalId,
+        reactions: updatedEntry.reaction
         });
 
-        res.json(updatedEntry.reactions);
+        res.json(updatedEntry.reaction);
     }
     catch(err){
         res.status(500).json({ message: "Reaction failed" });

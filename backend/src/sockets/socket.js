@@ -64,13 +64,13 @@ export const initSocket = (server) => {
       socket.emit("error", { message: "Failed to join room properly." });
     }
     });
-    socket.on("message_send", async ({ room_id, content }) => {
+    socket.on("message_send", async ({ room_id, content, imageUrl }) => {
       try {
         // 1. Server-side Validation
-        if (!content || content.trim().length === 0) {
+        if ((!content || content.trim().length === 0) && !imageUrl) {
           return socket.emit("error", { message: "Message content cannot be empty." });
         }
-        if (content.length > 1000) {
+        if (content && content.length > 1000) {
           return socket.emit("error", { message: "Message is too long (max 1000 characters)." });
         }
 
@@ -78,7 +78,8 @@ export const initSocket = (server) => {
         const newMessage = new message_Model({
           room: room_id,
           sender: socket.user.id,
-          content: content
+          content: content || '',
+          imageUrl: imageUrl || null
         });
 
         await newMessage.save();
@@ -92,13 +93,13 @@ export const initSocket = (server) => {
         socket.emit("error", { message: "Failed to send message. Please try again." });
       }
     });
-    socket.on("typing_start",(room_id)=>{
+    socket.on("typing_start",({room_id})=>{
       socket.to(room_id).emit("is_typing",{
         username: socket.user.username, 
         id: socket.user.id
       });
     })
-    socket.on("typing_end",(room_id)=>{
+    socket.on("typing_end",({room_id})=>{
       socket.to(room_id).emit("stop_typing",{
         username: socket.user.username, 
         id: socket.user.id
@@ -118,7 +119,7 @@ export const initSocket = (server) => {
                 ]
             },
             { $set: { lastReadMessageId: message_id } },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
         if (update) {
             socket.to(room_id).emit("readUpdate_message", {

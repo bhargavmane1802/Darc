@@ -10,6 +10,7 @@ import { roomRoutes } from "./src/routers/room.Router.js"
 import http from "http"
 import { initSocket } from "./src/sockets/socket.js"
 import startDigestJob from "./src/jobs/digest.job.js"
+import uploadRouter from "./src/routers/upload.routes.js"
 dotenv.config();
 const app = express();
 const server = http.createServer(app);
@@ -35,6 +36,7 @@ app.use("/auth/", validate_auth);
 app.use("/auth/room", roomRoutes);
 app.use("/auth/journal", journalRoutes);
 app.use("/auth/message", messageRoutes);
+app.use("/auth/upload", uploadRouter);
 app.get("/auth/", async (req, res) => {
     try {
         console.log(req.user);

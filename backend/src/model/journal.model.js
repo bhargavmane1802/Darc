@@ -5,7 +5,7 @@ const journal_Schema=new mongoose.Schema({
     content:{type:String},
     reaction:[{
         emoji:{type:String,required:true },
-        users:{type:mongoose.Schema.Types.ObjectId,ref:"User"}
+        users:[{type:mongoose.Schema.Types.ObjectId,ref:"User"}]
     }],//emoji
     imageUrl: { 
         type: String, 

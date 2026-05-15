@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGetMyRooms } from '../services/api.js';
 
 export default function Sidebar({
-  user, rooms, setRooms, activeRoom, onSelectRoom, onLogout, onCreateRoom, onJoinRoom,
+  user, rooms, setRooms, activeRoom, onSelectRoom, onLogout, onCreateRoom, onJoinRoom, onDeleteRoom,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -12,7 +12,14 @@ export default function Sidebar({
     apiGetMyRooms()
       .then((data) => {
         if (Array.isArray(data)) {
-          setRooms(data.map((r) => ({ _id: r._id, name: r.name, description: r.description || '', inviteCode: r.inviteCode })));
+          setRooms(data.map((r) => ({
+            _id: r._id,
+            name: r.name,
+            description: r.description || '',
+            inviteCode: r.inviteCode,
+            owner: r.owner,
+            isPrivate: r.isPrivate,
+          })));
         }
       })
       .catch((err) => console.error('Failed to load rooms:', err))
@@ -51,17 +58,36 @@ export default function Sidebar({
             {!collapsed && <span>No rooms yet</span>}
           </div>
         ) : (
-          rooms.map((r) => (
-            <button
-              key={r._id || r.name}
-              className={`sidebar__room ${activeRoom?._id === r._id ? 'sidebar__room--active' : ''}`}
-              onClick={() => onSelectRoom(r)}
-              title={r.name}
-            >
-              <span className="sidebar__room-hash">#</span>
-              {!collapsed && <span className="sidebar__room-name">{r.name}</span>}
-            </button>
-          ))
+          rooms.map((r) => {
+            const isOwner = user?.id && r.owner === user.id;
+            return (
+              <div
+                key={r._id || r.name}
+                className={`sidebar__room ${activeRoom?._id === r._id ? 'sidebar__room--active' : ''}`}
+              >
+                <button
+                  className="sidebar__room-btn"
+                  onClick={() => onSelectRoom(r)}
+                  title={r.name}
+                >
+                  <span className="sidebar__room-hash">#</span>
+                  {!collapsed && <span className="sidebar__room-name">{r.name}</span>}
+                </button>
+                {!collapsed && isOwner && onDeleteRoom && (
+                  <button
+                    className="sidebar__room-delete icon-btn icon-btn--sm icon-btn--danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteRoom(r);
+                    }}
+                    title="Delete room"
+                  >
+                    🗑
+                  </button>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 

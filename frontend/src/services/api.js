@@ -62,9 +62,30 @@ export const apiUpdateJournal = (roomId, journalId, content) =>
 export const apiDeleteJournal = (roomId, journalId) =>
   request(`/auth/journal/${roomId}/delete/${journalId}`, { method: 'DELETE' });
 
+// Journal Reactions — PATCH /:roomId/reaction/:journalId
+export const apiToggleReaction = (roomId, journalId, emoji) =>
+  request(`/auth/journal/${roomId}/reaction/${journalId}`, { method: 'PATCH', body: JSON.stringify({ emoji }) });
+
+// Image Upload — POST /auth/upload (multipart/form-data, no Content-Type header)
+export async function apiUploadImage(file) {
+  const token = localStorage.getItem('darc_token');
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const res = await fetch(`${BASE}/auth/upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.message || 'Image upload failed');
+  return data; // { imageUrl, publicId }
+}
+
 // AI Feedback (SSE) — path: /:roomId/aiResponce/:journalId
-// Updated Frontend Function
-export function streamAIFeedback(roomId, journalId, onToken, onDone, onError) {
+// Returns remaining AI credits via onRemainingCredits callback
+export function streamAIFeedback(roomId, journalId, onToken, onDone, onError, onRemainingCredits) {
   const token = localStorage.getItem('darc_token');
   const url = `${BASE}/auth/journal/${roomId}/aiResponce/${journalId}`;
 
@@ -78,7 +99,19 @@ export function streamAIFeedback(roomId, journalId, onToken, onDone, onError) {
   })
     .then(async (res) => {
       clearTimeout(timeoutId); // Request started, clear the connection timeout
-      
+
+      // Read rate limit header before checking response status
+      const remaining = res.headers.get('X-RateLimit-Remaining');
+      if (remaining !== null) {
+        onRemainingCredits?.(parseInt(remaining, 10));
+      }
+
+      if (res.status === 429) {
+        const data = await res.json().catch(() => null);
+        onError?.(data?.message || 'Daily AI feedback limit reached. Try again tomorrow!');
+        return;
+      }
+
       if (!res.ok) throw new Error('AI request failed (Server Error)');
       
       const reader = res.body.getReader();

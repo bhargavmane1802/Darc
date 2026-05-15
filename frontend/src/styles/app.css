@@ -110,8 +110,21 @@
 .sidebar__room {
   display: flex;
   align-items: center;
-  gap: 8px;
   width: 100%;
+  transition: all var(--duration) var(--ease);
+  position: relative;
+}
+.sidebar__room:hover { background: var(--bg-hover); }
+.sidebar__room:hover .sidebar__room-delete { opacity: 1; }
+.sidebar__room--active {
+  background: var(--accent-bg);
+  border-left: 3px solid var(--accent);
+}
+.sidebar__room-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
   padding: 10px 16px;
   background: none;
   border: none;
@@ -119,24 +132,27 @@
   font-family: var(--font-sans);
   font-size: 14px;
   cursor: pointer;
-  transition: all var(--duration) var(--ease);
   text-align: left;
+  min-width: 0;
 }
-.sidebar__room:hover { background: var(--bg-hover); color: var(--text-primary); }
-.sidebar__room--active {
-  background: var(--accent-bg);
-  color: var(--accent-light);
-  border-left: 3px solid var(--accent);
-}
+.sidebar__room--active .sidebar__room-btn { color: var(--accent-light); }
+.sidebar__room-btn:hover { color: var(--text-primary); }
 .sidebar__room-hash {
   font-weight: 700;
   color: var(--text-muted);
   font-size: 16px;
+  flex-shrink: 0;
 }
 .sidebar__room-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sidebar__room-delete {
+  opacity: 0;
+  margin-right: 8px;
+  transition: opacity var(--duration) var(--ease);
+  flex-shrink: 0;
 }
 
 .sidebar__footer {
@@ -349,6 +365,75 @@
   padding: 12px 18px;
   font-size: 18px;
 }
+.btn--upload {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---- Chat Image Messages ---- */
+.chat-msg__image {
+  margin: 6px 0;
+  max-width: 320px;
+}
+.chat-msg__image img {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: opacity var(--duration) var(--ease);
+}
+.chat-msg__image img:hover { opacity: 0.9; }
+
+/* ---- Read Receipts ---- */
+.chat-msg__read-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--accent-light);
+  margin-top: 2px;
+}
+.chat-msg__read-count {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ---- Image Preview ---- */
+.chat-panel__image-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 24px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  animation: fadeIn 0.2s var(--ease);
+}
+.chat-panel__image-preview img {
+  height: 56px;
+  width: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  object-fit: cover;
+}
+.chat-panel__image-preview-cancel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all var(--duration) var(--ease);
+}
+.chat-panel__image-preview-cancel:hover {
+  background: var(--danger, #ef4444);
+  color: #fff;
+  border-color: transparent;
+}
 
 /* ---- Journal Panel ---- */
 .journal-panel {
@@ -560,6 +645,134 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* ---- Invite Button ---- */
+.invite-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+.invite-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-light);
+  background: var(--accent-bg);
+}
+.invite-btn--copied {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(52,211,153,0.08);
+}
+.invite-btn__icon { font-size: 14px; }
+.invite-btn__text { white-space: nowrap; }
+
+/* ---- Journal Digest / Bot Entry ---- */
+.journal-entry--bot {
+  border: 1px solid var(--border-accent, var(--accent));
+  background: linear-gradient(135deg, rgba(139,92,246,0.04), rgba(59,130,246,0.04));
+}
+.journal-entry--bot .journal-entry__avatar {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  border: none;
+}
+.journal-entry--bot .journal-entry__name {
+  color: var(--accent-light);
+}
+.journal-entry__bot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--accent-bg);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 8px;
+}
+
+/* ---- AI Rate Limit ---- */
+.ai-remaining {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.ai-remaining--low {
+  color: #f59e0b;
+}
+.ai-remaining--zero {
+  color: var(--danger, #ef4444);
+}
+
+/* ---- Journal Reactions ---- */
+.journal-entry__reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+.reaction-pill:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.reaction-pill--active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-light);
+}
+.reaction-pill__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.reaction-pill--active .reaction-pill__count {
+  color: var(--accent-light);
+}
+.reaction-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  color: var(--text-muted);
+}
+.reaction-add:hover {
+  border-color: var(--accent);
+  color: var(--accent-light);
 }
 
 /* ---- Responsive ---- */

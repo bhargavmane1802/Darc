@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import ChatPanel from '../components/ChatPanel.jsx';
@@ -7,6 +7,7 @@ import MemberList from '../components/MemberList.jsx';
 import RoomModal from '../components/RoomModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
+import { apiDeleteRoom } from '../services/api.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
 import '../styles/app.css';
 
@@ -21,6 +22,13 @@ export default function AppShell() {
   const [members, setMembers] = useState([]);
   const [showModal, setShowModal] = useState(null); // 'create' | 'join' | null
   const [showMembers, setShowMembers] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  // Track active room ID in a ref so socket handlers always have latest value
+  const activeRoomRef = useRef(null);
+  useEffect(() => {
+    activeRoomRef.current = activeRoom?._id || null;
+  }, [activeRoom?._id]);
 
   // Connect socket on mount
   useEffect(() => {
@@ -35,8 +43,16 @@ export default function AppShell() {
       }
     });
 
+    // Generic socket error handler
+    socket.on('error', ({ message }) => {
+      addToast(message || 'Something went wrong', 'error');
+    });
+
+    // Room-specific presence: only update members if the event is for the active room
     socket.on('room_members', ({ room_id, members: m }) => {
-      if (room_id) setMembers(m || []);
+      if (room_id && room_id === activeRoomRef.current) {
+        setMembers(m || []);
+      }
     });
 
     return () => disconnectSocket();
@@ -47,11 +63,12 @@ export default function AppShell() {
     const socket = getSocket();
     if (!socket || !activeRoom) return;
     socket.emit('join_room', { room_id: activeRoom._id });
-  }, [activeRoom?._id,activeTab]);
+  }, [activeRoom?._id, activeTab]);
 
   const handleSelectRoom = useCallback((room) => {
     setActiveRoom(room);
     setActiveTab('chat');
+    setInviteCopied(false);
   }, []);
 
   const handleLogout = () => {
@@ -74,6 +91,35 @@ export default function AppShell() {
     addToast('Joined room!', 'success');
   };
 
+  // Room delete handler — only for room owner
+  const handleDeleteRoom = async (room) => {
+    const confirmed = window.confirm(`Delete room "${room.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+    try {
+      await apiDeleteRoom(room.name);
+      setRooms((prev) => prev.filter((r) => r._id !== room._id));
+      if (activeRoom?._id === room._id) {
+        setActiveRoom(null);
+        setMembers([]);
+      }
+      addToast(`Room "${room.name}" deleted`, 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to delete room', 'error');
+    }
+  };
+
+  // Copy invite code to clipboard
+  const handleCopyInvite = () => {
+    if (!activeRoom?.inviteCode) return;
+    navigator.clipboard.writeText(activeRoom.inviteCode).then(() => {
+      setInviteCopied(true);
+      addToast('Invite code copied!', 'success');
+      setTimeout(() => setInviteCopied(false), 2000);
+    }).catch(() => {
+      addToast('Failed to copy', 'error');
+    });
+  };
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -85,6 +131,7 @@ export default function AppShell() {
         onLogout={handleLogout}
         onCreateRoom={() => setShowModal('create')}
         onJoinRoom={() => setShowModal('join')}
+        onDeleteRoom={handleDeleteRoom}
       />
 
       <main className="app-shell__main">
@@ -99,6 +146,19 @@ export default function AppShell() {
                 )}
               </div>
               <div className="room-header__actions">
+                {/* Invite Code Copy Button */}
+                {activeRoom.inviteCode && (
+                  <button
+                    className={`invite-btn ${inviteCopied ? 'invite-btn--copied' : ''}`}
+                    onClick={handleCopyInvite}
+                    title={`Invite code: ${activeRoom.inviteCode}`}
+                  >
+                    <span className="invite-btn__icon">{inviteCopied ? '✓' : '🔗'}</span>
+                    <span className="invite-btn__text">
+                      {inviteCopied ? 'Copied!' : 'Invite'}
+                    </span>
+                  </button>
+                )}
                 <div className="room-header__tabs">
                   <button
                     className={`tab-btn ${activeTab === 'chat' ? 'tab-btn--active' : ''}`}
