@@ -6,6 +6,10 @@ const message_Schema=new mongoose.Schema({
     readBy:[{
         type:mongoose.Schema.Types.ObjectId,ref:"User"
     }],
+    imageUrl: { 
+    type: String, 
+    default: null 
+    },
     type:{type:String},
 },{ timestamps: true })
 const message_Model= mongoose.model("Message",message_Schema);

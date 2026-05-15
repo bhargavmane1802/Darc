@@ -103,6 +103,40 @@ export default function ChatPanel({ roomId, user }) {
     const d = new Date(ts);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+  // Frontend logic (React/Vue/Vanilla)
+  const submitJournalWithImage = async (text, file) => {
+    let uploadedImageUrl = null;
+
+    // STEP 1: Upload Image (if one is selected)
+    if (file) {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }, // NO 'Content-Type' header here!
+        body: formData,
+      });
+      
+      if (!uploadRes.ok) throw new Error("Image upload failed");
+      
+      const uploadData = await uploadRes.json();
+      uploadedImageUrl = uploadData.imageUrl;
+    }
+
+    // STEP 2: Create Journal Entry
+    const journalRes = await fetch("/api/journals", {
+      method: "POST",
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify({
+        content: text,
+        imageUrl: uploadedImageUrl // Null if no image, URL if successful
+      }),
+    });
+  };
 
   return (
     <div className="chat-panel">

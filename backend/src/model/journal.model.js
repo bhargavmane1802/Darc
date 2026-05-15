@@ -7,6 +7,10 @@ const journal_Schema=new mongoose.Schema({
         emoji:{type:String,required:true },
         users:{type:mongoose.Schema.Types.ObjectId,ref:"User"}
     }],//emoji
+    imageUrl: { 
+        type: String, 
+        default: null 
+    },
     aiResponse:{type:String}
 },{ timestamps: true })
 const journal_Model= mongoose.model("Journal",journal_Schema);
