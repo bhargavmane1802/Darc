@@ -34,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
+  "https://darc-1qtm2nuq0-bhargavmane.vercel.app",
   process.env.CLIENT_URL
 ];
 
