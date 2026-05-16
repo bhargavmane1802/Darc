@@ -21,6 +21,7 @@ const main = async () => {
     try {
         await mongoose.connect(process.env.Mongo_Url);
         console.log("DB connected");
+        startDigestJob();
     }
     catch (e) {
         console.log(e);
