@@ -87,7 +87,7 @@ export async function apiUploadImage(file) {
 // Returns remaining AI credits via onRemainingCredits callback
 export function streamAIFeedback(roomId, journalId, onToken, onDone, onError, onRemainingCredits) {
   const token = localStorage.getItem('darc_token');
-  const url = `${BASE}/auth/journal/${roomId}/aiResponce/${journalId}`;
+  const url = `${BASE}/auth/journal/${roomId}/aiResponse/${journalId}`;
 
   // 1. Create a controller to handle timeouts
   const controller = new AbortController();

@@ -19,7 +19,7 @@ const create = async (req, res, next) => {
         })
         room.members.push(id);
         await room.save();
-        return res.status(200).json({ message: "room created", room_id: room._id });
+        return res.status(200).json({ message: "room created", room_id: room._id,inviteCode:room.inviteCode });
     }
     catch (err) {
         console.log("room creation failed");

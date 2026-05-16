@@ -15,7 +15,7 @@ export default function RoomModal({ mode, onClose, onRoomCreated, onRoomJoined }
     setLoading(true);
     try {
       const data = await apiCreateRoom(name.trim(), description.trim());
-      onRoomCreated({ _id: data.room_id, name: name.trim(), description: description.trim() });
+      onRoomCreated({ _id: data.room_id, name: name.trim(), description: description.trim(),inviteCode:data.inviteCode, });
     } catch (err) {
       addToast(err.message || 'Failed to create room', 'error');
     } finally {
@@ -34,6 +34,7 @@ export default function RoomModal({ mode, onClose, onRoomCreated, onRoomJoined }
         _id: data.room_id,
         name: data.name || `Room`,
         description: data.description || '',
+        inviteCode:inviteCode,
       });
       socket.emit('room_join',{room_id:data.room_id});
       

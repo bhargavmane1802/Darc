@@ -76,7 +76,7 @@ const deleteEntries = async (req, res, next) => {
         next(err);
     }
 }
-const aiResponces=async(req,res,next)=>{
+const aiResponses=async(req,res,next)=>{
     try{
         const {id}=req.user;
         const {roomId,journalId}=req.params;
@@ -167,4 +167,4 @@ const manageReaction=async(req,res,next)=>{
         res.status(500).json({ message: "Reaction failed" });
     }
 }
-export { createEntries, displayEntries,updateEntries,deleteEntries,aiResponces,manageReaction};
+export { createEntries, displayEntries,updateEntries,deleteEntries,aiResponses,manageReaction};

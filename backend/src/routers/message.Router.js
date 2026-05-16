@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { messageCreate, messageUpdate, messageDelete,messageDisplay } from "../controllers/message.controller.js"
-import { verifyRoom } from "../middlwares/roomMember.middlware.js"
+import { verifyRoom } from "../middlewares/roomMember.middlware.js"
 const messageRoutes = Router();
 messageRoutes.route("/:roomId/create").post(verifyRoom, messageCreate);
 messageRoutes.route("/:roomId/update/:messageId").put(verifyRoom, messageUpdate);
