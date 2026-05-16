@@ -16,7 +16,7 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 initSocket(server);
-const port = 8080;
+const port =process.env.PORT|| 8080;
 const main = async () => {
     try {
         await mongoose.connect(process.env.Mongo_Url);
@@ -32,10 +32,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Allowed origins
 const allowedOrigins = [
+  process.env.FRONTEND_URL,
   "http://localhost:3000",
   "http://localhost:5173",
-  "https://darc-1qtm2nuq0-bhargavmane.vercel.app",
-  process.env.CLIENT_URL
 ];
 
 app.use(
