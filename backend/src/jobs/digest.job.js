@@ -67,20 +67,28 @@ const startDigestJob = () => {
     const limit = pLimit(3);
 
     // Runs every minute for testing. Change to "0 0 * * *" for Midnight.
-    cron.schedule("*0 0 * * *", async () => {
+    cron.schedule("0 0 * * *", async () => {
         console.log("Running Daily Digest Job...");
 
         try {
             const mentorId = await getBotId();
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
-            const todayStr = startOfDay.toISOString().slice(0, 10);
+            const startOfYesterday = new Date();
+            startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+            startOfYesterday.setHours(0, 0, 0, 0);
+
+            const endOfYesterday = new Date();
+            endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+            endOfYesterday.setHours(23, 59, 59, 999);
+            const todayStr = startOfYesterday.toISOString().slice(0, 10);
 
             // STEP 1: Aggregation (Fetch everything in one big DB call)
             const roomGroups = await journal_Model.aggregate([
                 {
                     $match: {
-                        createdAt: { $gte: startOfDay }
+                        createdAt:{
+                                    $gte: startOfYesterday,
+                                    $lte: endOfYesterday
+                                }
                     }
                 },
                 {
@@ -109,7 +117,9 @@ const startDigestJob = () => {
         } catch (err) {
             console.error("Critical Digest Job Failure:", err);
         }
-    });
+    },{
+   timezone: "Asia/Kolkata"
+});
 };
 
 export default startDigestJob;
