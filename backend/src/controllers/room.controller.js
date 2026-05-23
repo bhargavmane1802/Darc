@@ -62,10 +62,11 @@ const remove = async (req, res, next) => {
 const myRooms = async (req, res, next) => {
     try {
         const { id } = req.user;
-        const rooms = await room_Model.find({ members: id }).select('name description inviteCode isPrivate owner createdAt');
+        const rooms = await room_Model.find({ members: id }).select('name description inviteCode isPrivate owner createdAt').lean();
         return res.status(200).json(rooms);
     }
     catch (err) {
+        err.message="failed to fetch room names"
         next(err);
     }
 }

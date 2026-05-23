@@ -88,6 +88,10 @@ app.get("/test", async(req, res) => {
     await startDigestJob();
     return res.send("it is working");
 })
-app.use("/", (err, req, res, next) => {
-    return res.send("Error 404");
+app.use((err, req, res, next) => {
+  console.log(err,err.message);
+  res.status(err.status || 500).json({
+        message: err.message
+    });
+
 })
