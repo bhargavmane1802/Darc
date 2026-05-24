@@ -9,7 +9,7 @@ const createEntries = async (req, res, next) => {
         const { roomId } = req.params;
         const { id } = req.user;
         const {content, imageUrl} = req.body;
-        if (!id || (!content && !imageUrl)) return res.status(400).json({ message: "insufficient information" });
+        if (!id || (!content && !imageUrl)) return res.status(404).json({ message: "Insufficient" });
         const journal = new journal_Model({
             author: id,
             room: roomId,
@@ -20,10 +20,12 @@ const createEntries = async (req, res, next) => {
         await journal.populate("author", "username");
         const io=getIO();
         io.to(roomId).emit("create_journal",journal);
-        return res.status(201).json("entry saved");
+        return res.status(201).json("journal entry created");
         
     }
     catch (err) {
+        console.log("Failed to create journal entry");
+        err.message="Failed createEntries";
         next(err);
     }
 }
@@ -39,7 +41,9 @@ const displayEntries = async (req, res, next) => {
         // do pagation in forntend 
     }
     catch (err) {
-        return next(err);
+        console.log("Failed to display journal entry");
+        err.message="Failed displayEntries";
+        next(err);
     }
 }
 const updateEntries = async (req, res, next) => {
@@ -47,16 +51,18 @@ const updateEntries = async (req, res, next) => {
         const { id } = req.user;
         const { roomId, journalId } = req.params;
         const { content} = req.body;
-        if(!content)return res.status(400).json({message:"empty fields "});
+        if(!content)return res.status(404).json({message:"Insufficient"});
         const journal = await journal_Model.findOne({ _id: journalId, author: id });
-        if (!journal) return res.status(403).json({ message: "the does not exists or u are not the sender" });
+        if (!journal) return res.status(403).json({ message: "Unauthorized" });
         if (content) journal.content = content;
         await journal.save();
         const io=getIO();
         io.to(roomId).emit("update_journal",{journal});
-        res.status(201).json({ message: "journal updated" });
+        res.status(200).json({ message: "journal updated" });
     }
     catch (err) {
+        console.log("Failed to update journal entry");
+        err.message="Failed updateEntries";
         next(err);
     }
 }
@@ -65,14 +71,16 @@ const deleteEntries = async (req, res, next) => {
         const { id } = req.user;
         const { roomId, journalId } = req.params;
         const journal = await journal_Model.findOne({ _id: journalId, author: id });
-        if (!journal) return res.status(403).json({ message: "the message does not exists or u are not the sender" });
+        if (!journal) return res.status(403).json({ message: "Unauthorized" });
         const response = await journal_Model.deleteOne({ _id: journalId });
         console.log(response);
         const io = getIO();
         io.to(roomId).emit("delete_journal",{entry_id:journalId});
-        res.status(201).json({ message: "journal deleted" });
+        res.status(200).json({ message: "journal deleted" });
     }
     catch (err) {
+        console.log("Failed to delete journal entry");
+        err.message="Failed deleteEntries";
         next(err);
     }
 }
@@ -129,7 +137,7 @@ const manageReaction=async(req,res,next)=>{
     const userId=req.user.id;
     try{
         const entry = await journal_Model.findById(journalId);
-        if(!entry)return res.status(404).json({ message: "Entry not found" });
+        if(!entry)return res.status(404).json({ message: "Insufficient" });
         const reactionGroup=entry.reaction.find(r=> r.emoji===emoji);
         if(reactionGroup){
             const userIndex = reactionGroup.users.indexOf(userId);
@@ -161,10 +169,12 @@ const manageReaction=async(req,res,next)=>{
         reactions: updatedEntry.reaction
         });
 
-        res.json(updatedEntry.reaction);
+        res.status(200).json(updatedEntry.reaction);
     }
     catch(err){
-        res.status(500).json({ message: "Reaction failed" });
+        console.log("Failed to reaction of journal entry");
+        err.message="Failed manageReaction";
+        next(err);
     }
 }
 export { createEntries, displayEntries,updateEntries,deleteEntries,aiResponses,manageReaction};

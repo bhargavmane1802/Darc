@@ -11,6 +11,7 @@ const validate_auth=async(req,res,next)=>{
         return next();
     }
     catch(e){
+        console.log("failed to validate user");
         e.message="error in auth validation"
         return next(e);
     }

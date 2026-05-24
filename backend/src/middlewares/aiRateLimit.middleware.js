@@ -26,6 +26,7 @@ const aiRateLimit =async (req,res,next)=>{
     next();}
     catch(err){
         console.error("Rate Limit Middleware Error:", err);
+        err.message="Failed aiRateLimit"
         next(err);
     }
 }

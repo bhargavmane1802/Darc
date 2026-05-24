@@ -9,7 +9,9 @@ const verifyRoom=async (req,res,next)=>{
         return next();
    }
    catch(err){
-        return next(err);
+     console.log("Failed to verifyRoom");
+     err.message="Failed verifyRoom"
+     next(err);
    }
 }
 export {verifyRoom};

@@ -8,7 +8,7 @@ const create = async (req, res, next) => {
         //issue in setting private 
         if (!name) return res.status(400).json({ message: "incomplete information" });
         const roomExist = await room_Model.findOne({ name: name });
-        if (roomExist) return res.status(405).json({ message: "room already exists" });
+        if (roomExist) return res.status(400).json({ message: "room already exists" });
         const { id } = req.user;
         const room = new room_Model({
             name: name,
@@ -29,7 +29,7 @@ const create = async (req, res, next) => {
 const join = async (req, res, next) => {
     try {
         const { inviteCode } = req.params;
-        if (!inviteCode) return res.status(401).json({ message: "invite Code is missing" });
+        if (!inviteCode) return res.status(404).json({ message: "invite Code is missing" });
         const room = await room_Model.findOne({ inviteCode: inviteCode });
         if (!room) return res.status(404).json({ message: "Room not found , invalid invite code" });
         if (room.isPrivate) return res.status(404).json({ message: "room is private" });
@@ -41,7 +41,9 @@ const join = async (req, res, next) => {
         return res.status(200).json({ message: `${username} joined the room`, room_id: room._id, name: room.name, description: room.description });
     }
     catch (err) {
-        res.status(400).json({ message: err })
+        console.log("failed to join room through invite code ");
+        err.message="falied join room"
+        next(err);
     }
 }
 const remove = async (req, res, next) => {
@@ -49,7 +51,7 @@ const remove = async (req, res, next) => {
         const { name } = req.params;
         const { id } = req.user;
         const match_room = await room_Model.findOne({ name: name, owner: id });
-        if (!match_room) return res.status(404).json({ message: "room not found or you are not authorised to delete the room" });
+        if (!match_room) return res.status(403).json({ message: "unauthorized" });
         await room_Model.deleteOne({ _id: match_room._id });
         return res.status(200).json({ message: "room deleted sucessfully" });
     }
