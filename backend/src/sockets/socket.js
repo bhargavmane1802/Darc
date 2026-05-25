@@ -35,7 +35,7 @@ export const initSocket = (server) => {
     console.log("User connected:", socket.id);
     const user=socket.user;
     
-    // joins room 
+    // joins room //who all are live
     socket.on("join_room",async({room_id})=>{
       try {
         socket.join(room_id);

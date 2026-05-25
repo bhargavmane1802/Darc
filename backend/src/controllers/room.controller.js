@@ -32,12 +32,13 @@ const join = async (req, res, next) => {
         if (!inviteCode) return res.status(404).json({ message: "invite Code is missing" });
         const room = await room_Model.findOne({ inviteCode: inviteCode });
         if (!room) return res.status(404).json({ message: "Room not found , invalid invite code" });
-        if (room.isPrivate) return res.status(404).json({ message: "room is private" });
+        // if (room.isPrivate) return res.status(404).json({ message: "room is private" });
         const { username, id } = req.user;
         if (room.members.some(member => member.equals(id))) return res.status(409).json({ message: `${username} already exists` });
         room.members.push(id);
         await room.save();
         const io=getIO();
+
         return res.status(200).json({ message: `${username} joined the room`, room_id: room._id, name: room.name, description: room.description });
     }
     catch (err) {
@@ -65,7 +66,11 @@ const myRooms = async (req, res, next) => {
     try {
         const { id } = req.user;
         const rooms = await room_Model.find({ members: id }).select('name description inviteCode isPrivate owner createdAt').lean();
-        return res.status(200).json(rooms);
+        const final= rooms.map((room)=>{
+            if(room.isPrivate && room.owner !=id)room.inviteCode=null;
+            return room;
+        })
+        return res.status(200).json(final);
     }
     catch (err) {
         err.message="failed to fetch room names"
