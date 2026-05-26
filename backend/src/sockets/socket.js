@@ -172,26 +172,35 @@ export const initSocket = (server) => {
     }
 });
 
-    socket.on("disconnecting", async () => {
-    // socket.rooms is a Set containing the socket ID and the rooms joined
-    for (const room_id of socket.rooms) {
-      if (room_id !== socket.id) { // Don't process the socket's private room
-        try {
-          const roomKey = `room:${room_id}:presence`;
-          
-          // Remove the user from the Redis Set
-          // Note: Must match the exact string added in sadd
-          const memberData =  user.username;
-          await redis.srem(roomKey, memberData);
+socket.on("disconnecting", async () => {
+  try {
+    // clone rooms before async operations
+    const rooms = [...socket.rooms];
 
-          const members = await redis.smembers(roomKey);
-          socket.to(room_id).emit("room_members", { room_id, members });
-        } catch (err) {
-          console.error("Redis Leave Error:", err);
-        }
-      }
+    for (const room_id of rooms) {
+
+      // skip private socket room
+      if (room_id === socket.id) continue;
+
+      const roomKey = `room:${room_id}:presence`;
+
+      // remove username from redis set
+      await redis.srem(roomKey, user.username);
+
+      // get updated members
+      const members = await redis.smembers(roomKey);
+
+      // notify remaining users
+      io.to(room_id).emit("room_members", {
+        room_id,
+        members
+      });
     }
-  });
+
+  } catch (err) {
+    console.error("Disconnecting Error:", err);
+  }
+});
 
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);

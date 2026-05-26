@@ -8,9 +8,9 @@ export default function MemberList({ members }) {
         {members.map((m, i) => (
           <div key={m.id || i} className="member-list__item">
             <span className="member-list__avatar">
-              {m.username?.[0]?.toUpperCase() || '?'}
+              {m?.[0]?.toUpperCase() || '?'}
             </span>
-            <span className="member-list__name">{m.username}</span>
+            <span className="member-list__name">{m}</span>
             <span className="member-list__dot" />
           </div>
         ))}
