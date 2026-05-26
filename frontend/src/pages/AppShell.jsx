@@ -63,27 +63,38 @@ export default function AppShell() {
     const socket = getSocket();
     if (!socket || !activeRoom) return;
     socket.emit('join_room', { room_id: activeRoom._id });
-  }, [activeRoom?._id, activeTab]);
+  }, [activeRoom?._id]);
 
   const handleSelectRoom = useCallback((room) => {
-    setActiveRoom(room);
-    setActiveTab('chat');
-    setInviteCopied(false);
-  }, []);
+  const socket = getSocket();
+
+  // remove user from previous room presence cache
+  if (socket && activeRoomRef.current) {
+    socket.emit("switch_room", activeRoomRef.current);
+
+    // optional but recommended:
+    // socket.emit("leave_room_socket", activeRoomRef.current);
+  }
+
+  // switch to new room
+  setActiveRoom(room);
+  setActiveTab('chat');
+  setInviteCopied(false);
+}, []);
 
   const handleLogout = () => {
     disconnectSocket();
     logout();
     navigate('/');
   };
-
+  // create a new room
   const handleRoomCreated = (room) => {
     setRooms((prev) => [...prev, room]);
     setActiveRoom(room);
     setShowModal(null);
     addToast('Room created!', 'success');
   };
-
+  // join a room that already exisites
   const handleRoomJoined = (room) => {
     setRooms((prev) => [...prev, room]);
     setActiveRoom(room);
