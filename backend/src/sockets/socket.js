@@ -44,7 +44,7 @@ export const initSocket = (server) => {
         const memberData = user.username;
         // 1. Redis Operations
         await redis.sadd(roomKey, memberData);
-        await redis.expire(roomKey, 86400);
+        await redis.expire(roomKey, 180);//for testing purposes 
 
         // 2. Fetch and Broadcast Members
         const members = await redis.smembers(roomKey);

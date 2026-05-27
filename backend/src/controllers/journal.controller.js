@@ -1,22 +1,41 @@
 import room_Model from "../model/room.model.js";
 import journal_Model from "../model/journal.model.js";
 import {getIO} from "../sockets/socket.js"
-import { getAIFeedback } from "../services/ai.service.js";
+import { generateEmbeddings, getAIFeedback } from "../services/ai.service.js";
 import message_Model from "../model/message.model.js";
-
+import redis from "../config/redis.js";
+import { pineconeIndex } from "../config/pinecone.js";
 const createEntries = async (req, res, next) => {
     try {
         const { roomId } = req.params;
         const { id } = req.user;
         const {content, imageUrl} = req.body;
         if (!id || (!content && !imageUrl)) return res.status(404).json({ message: "Insufficient" });
+        const embedding = await generateEmbeddings(content);
         const journal = new journal_Model({
             author: id,
             room: roomId,
             content: content,
             imageUrl: imageUrl || null,
+            embedding:embedding,
         })
+
         await journal.save();
+        if (content && embedding.length > 0) {
+            await pineconeIndex.upsert({
+                records: [{
+                    id: journal._id.toString(), // Cross-referenced via Mongo ID
+                values: embedding,
+                metadata: {
+                    roomId: roomId.toString(),
+                    authorId: id.toString(),
+                    content: content,
+                    aiResponse: ""
+                }
+                }]
+            });
+        }
+        
         await journal.populate("author", "username");
         const io=getIO();
         io.to(roomId).emit("create_journal",journal);
@@ -70,39 +89,100 @@ const deleteEntries = async (req, res, next) => {
     try {
         const { id } = req.user;
         const { roomId, journalId } = req.params;
+
+        // 1. Author verification & check if document exists
         const journal = await journal_Model.findOne({ _id: journalId, author: id });
-        if (!journal) return res.status(403).json({ message: "Unauthorized" });
+        if (!journal) return res.status(403).json({ message: "Unauthorized or entry not found" });
+
+        // 2. LAYER 1: Permanent removal from MongoDB (Source of Truth)
         const response = await journal_Model.deleteOne({ _id: journalId });
-        console.log(response);
+        console.log("MongoDB Delete Result:", response);
+
+        // 3. LAYER 2: Evict semantic vectors and metadata payload from Pinecone
+        // This ensures the deleted text is never pulled as context in future RAG queries
+        await pineconeIndex.deleteOne({id:journalId.toString()});
+
+        // 4. LAYER 3: Evict the AI response cache key from Redis
+        const cacheKey = `ai_response:room:${roomId}:journal:${journalId}`;
+        await redis.del(cacheKey);
+
+        console.log(`🗑️ Cascading destruction complete for Journal ${journalId} in Room ${roomId}`);
+
+        // 5. Broadcast real-time deletion update to the socket channel
         const io = getIO();
-        io.to(roomId).emit("delete_journal",{entry_id:journalId});
-        res.status(200).json({ message: "journal deleted" });
+        io.to(roomId).emit("delete_journal", { entry_id: journalId });
+
+        // 6. Return response to sender client
+        return res.status(200).json({ message: "journal deleted" });
     }
     catch (err) {
-        console.log("Failed to delete journal entry");
-        err.message="Failed deleteEntries";
+        console.error("❌ Failed cascading deleteEntries execution:", err);
+        err.message = "Failed deleteEntries";
         next(err);
     }
-}
+};
+// return the date 
+const getStartOfToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}; 
+
 const aiResponses=async(req,res,next)=>{
     try{
         const {id}=req.user;
         const {roomId,journalId}=req.params;
+        const cacheKey = `ai_response:room:${roomId}:journal:${journalId}`;
+        const cachedResponse = await redis.get(cacheKey);
+        if(cachedResponse){
+            res.setHeader("Content-Type", "text/event-stream");
+            res.write(`data: ${JSON.stringify({ token: cachedResponse })}\n\n`);
+            res.write(`data: ${JSON.stringify({ token: "[DONE]" })}\n\n`);
+            return res.end();
+        }
+    
+        //mongo db local check 
+        const entry=await journal_Model.findOne({_id:journalId,room :roomId});
+        if (!entry) {
+            res.setHeader("Content-Type", "text/event-stream");
+            res.write(`data: ${JSON.stringify({ error: "entry not found " })}\n\n`);
+            return res.end();
+        }
+        if (entry.aiResponse) {
+            
+            // Re-hydrate the Redis cache aside layer (24 hours TTL)
+            await redis.set(cacheKey, entry.aiResponse, "EX", 86400);
 
-        // 1. Setup SSE Headers headers needed for stream
+            res.setHeader("Content-Type", "text/event-stream");
+            res.write(`data: ${JSON.stringify({ token: entry.aiResponse })}\n\n`);
+            res.write(`data: ${JSON.stringify({ token: "[DONE]" })}\n\n`);
+            return res.end();
+        }
+ 
+        const currentVector =entry.embedding;
+        const pineconeRes = await pineconeIndex.query({
+            vector: currentVector,
+            topK: 3, // Request 3 in case the current entry itself appears in the results
+            includeMetadata: true,
+            filter: {
+                roomId: { $eq: roomId.toString() },
+                authorId: { $eq: entry.author.toString() }
+            }
+        });
+
+        const pastEntries = pineconeRes.matches
+            .filter(match => match.id !== journalId.toString())
+            .slice(0, 2)
+            .map(match => ({
+                content: match.metadata.content,
+                aiResponse: match.metadata.aiResponse || "No historical analysis recorded for this entry."
+            }));
         res.setHeader("Content-Type", "text/event-stream");
         res.setHeader("Cache-Control", "no-cache");
         res.setHeader("Connection", "keep-alive");
-        res.flushHeaders(); // Send headers immediately
+        res.flushHeaders();
 
-        const entry=await journal_Model.findOne({_id:journalId});
-        if (!entry) {
-            res.write(`data: ${JSON.stringify({ error: "entry not found " })}\n\n`);
-res.end();
-return;
-        }
-        const pastEntry=(await journal_Model.find({ room:roomId,author:entry.author}).sort({createdAt:-1}).limit(5));
-        const stream=await getAIFeedback(entry.content,pastEntry);
+        const stream=await getAIFeedback(entry.content,pastEntries);
 
         //this is how stream flow works
         let fullResponse = "";
@@ -111,7 +191,6 @@ return;
         for await (const chunk of stream) {
         const chunkText = chunk.text();
         fullResponse += chunkText;
-
         // SSE format requires "data: " prefix and double newline
         res.write(`data: ${JSON.stringify({ token: chunkText })}\n\n`);
         }
@@ -119,7 +198,16 @@ return;
         // 3. Save the full accumulated string to MongoDB
         entry.aiResponse = fullResponse;
         await entry.save();
-
+        await redis.set(cacheKey, fullResponse, "EX", 86400);
+        pineconeIndex.update({
+            id: journalId.toString(),
+            metadata: { 
+                roomId: roomId.toString(),
+                authorId: entry.author.toString(),
+                content: entry.content,
+                aiResponse: fullResponse 
+            }
+        }).catch(err => console.error("⚠️ Background Pinecone Metadata Update Failed:", err));
         // 4. Signal completion
         res.write(`data: ${JSON.stringify({ token: "[DONE]" })}\n\n`);
         res.end();

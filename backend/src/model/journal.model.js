@@ -11,6 +11,9 @@ const journal_Schema=new mongoose.Schema({
         type: String, 
         default: null 
     },
+    embedding: [{ 
+        type: Number, 
+    }],
     aiResponse:{type:String}
 },{ timestamps: true })
 const journal_Model= mongoose.model("Journal",journal_Schema);
