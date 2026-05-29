@@ -1,5 +1,5 @@
 /* ============================================
-   DARC — Landing Page
+   DARC — Landing Page (Light Theme)
    ============================================ */
 
 .landing {
@@ -8,6 +8,7 @@
   overflow: hidden;
   --mx: 50%;
   --my: 50%;
+  background: var(--bg-base);
 }
 
 /* ---- Nav ---- */
@@ -33,7 +34,7 @@
 
 .landing__logo-icon {
   font-size: 24px;
-  color: var(--accent-light);
+  color: var(--accent);
   filter: drop-shadow(0 0 8px var(--accent-glow));
 }
 
@@ -55,7 +56,7 @@
   padding: 6px 16px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--accent-light);
+  color: var(--accent);
   background: var(--accent-bg);
   border: 1px solid var(--border-accent);
   border-radius: var(--radius-full);
@@ -70,10 +71,11 @@
   line-height: 1.05;
   margin-bottom: 24px;
   animation: slideUp 0.6s var(--ease) 0.2s both;
+  color: var(--text-primary);
 }
 
 .landing__gradient-text {
-  background: linear-gradient(135deg, var(--accent-light), #818CF8, #F0ABFC);
+  background: linear-gradient(135deg, var(--accent), #818CF8, #D8B4FE);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -106,7 +108,7 @@
 .landing__orb--1 {
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.2), transparent 70%);
+  background: radial-gradient(circle, rgba(124, 107, 255, 0.10), transparent 70%);
   top: -100px;
   left: var(--mx, 30%);
   transition: left 1s ease-out;
@@ -115,7 +117,7 @@
 .landing__orb--2 {
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.15), transparent 70%);
+  background: radial-gradient(circle, rgba(162, 155, 254, 0.08), transparent 70%);
   bottom: -80px;
   right: 10%;
   animation: float 8s ease-in-out infinite;
@@ -124,7 +126,7 @@
 .landing__orb--3 {
   width: 300px;
   height: 300px;
-  background: radial-gradient(circle, rgba(240, 171, 252, 0.1), transparent 70%);
+  background: radial-gradient(circle, rgba(216, 180, 254, 0.08), transparent 70%);
   top: var(--my, 40%);
   right: var(--mx, 20%);
   transition: top 1.5s ease-out, right 1.5s ease-out;
@@ -149,6 +151,7 @@
   margin-bottom: 48px;
   letter-spacing: -0.5px;
   animation: slideUp 0.5s var(--ease);
+  color: var(--text-primary);
 }
 
 .landing__features-grid {
@@ -160,13 +163,13 @@
 }
 
 .feature-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 32px 28px;
   transition: all 0.3s var(--ease);
   animation: slideUp 0.5s var(--ease) both;
+  box-shadow: var(--shadow-sm);
 }
 
 .feature-card:hover {
@@ -184,6 +187,7 @@
   font-size: 18px;
   font-weight: 700;
   margin-bottom: 8px;
+  color: var(--text-primary);
 }
 
 .feature-card__desc {

@@ -169,9 +169,10 @@ export default function AppShell() {
             <header className="room-header">
               <div className="room-header__info">
                 <h2 className="room-header__name">{activeRoom.name}</h2>
-                {activeRoom.description && (
-                  <span className="room-header__desc">{activeRoom.description}</span>
-                )}
+                <span className="room-header__subtitle">
+                  {members.length} member{members.length !== 1 ? 's' : ''} online
+                  {activeRoom.description ? ` · ${activeRoom.description}` : ''}
+                </span>
               </div>
               <div className="room-header__actions">
                 {/* Invite Code Copy Button */}
@@ -213,12 +214,22 @@ export default function AppShell() {
 
             <div className="room-body">
               <div className="room-body__content">
-                {activeTab === 'chat' ? (
-                  <ChatPanel roomId={activeRoom._id} user={user} />
-                ) : (
-                  <JournalPanel roomId={activeRoom._id} user={user} />
-                )}
-              </div>
+  <div
+    className={`tab-content ${
+      activeTab === 'chat' ? 'tab-content--active' : ''
+    }`}
+  >
+    <ChatPanel roomId={activeRoom._id} user={user} />
+  </div>
+
+  <div
+    className={`tab-content ${
+      activeTab === 'journal' ? 'tab-content--active' : ''
+    }`}
+  >
+    <JournalPanel roomId={activeRoom._id} user={user} />
+  </div>
+</div>
               {showMembers && (
                 <aside className="room-body__members">
                   <MemberList members={members} />

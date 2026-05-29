@@ -75,7 +75,7 @@ app.use(
 );
 
 server.listen(port, () => {
-    console.log("listning at port 8080");
+    console.log(`${port}`);
 })
 app.use("/user", userRoutes);
 app.use("/auth/", validate_auth);

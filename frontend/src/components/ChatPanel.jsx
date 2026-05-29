@@ -177,52 +177,61 @@ export default function ChatPanel({ roomId, user }) {
   return (
     <div className="chat-panel">
       <div className="chat-panel__messages">
-        {messages.map((msg, idx) => {
+        {messages.map((msg) => {
           const isOwn = msg.sender?.username === user?.username || msg.sender?._id === user?.id;
           const readCount = isOwn ? getReadCount(msg._id) : 0;
           return (
-            <div key={msg._id} className={`chat-msg ${isOwn ? 'chat-msg--own' : ''}`}>
-              <div className="chat-msg__avatar">
-                {msg.sender?.username?.[0]?.toUpperCase() || '?'}
-              </div>
-              <div className="chat-msg__body">
-                <div className="chat-msg__meta">
-                  <span className="chat-msg__author">{msg.sender?.username || 'Unknown'}</span>
-                  <span className="chat-msg__time">{formatTime(msg.createdAt)}</span>
+            <div key={msg._id} className={`chat-bubble ${isOwn ? 'chat-bubble--own' : 'chat-bubble--other'}`}>
+              {!isOwn && (
+                <div className="chat-bubble__avatar">
+                  {msg.sender?.username?.[0]?.toUpperCase() || '?'}
                 </div>
-                {editingId === msg._id ? (
-                  <div className="chat-msg__edit">
-                    <input
-                      className="input-group__input"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleEditSave(msg._id)}
-                      autoFocus
-                    />
-                    <button className="icon-btn icon-btn--sm" onClick={() => handleEditSave(msg._id)}>✓</button>
-                    <button className="icon-btn icon-btn--sm" onClick={() => setEditingId(null)}>✕</button>
-                  </div>
-                ) : (
-                  <>
-                    {msg.imageUrl && (
-                      <div className="chat-msg__image">
-                        <img src={msg.imageUrl} alt="Shared image" loading="lazy" />
-                      </div>
+              )}
+              <div className="chat-bubble__wrapper">
+                {!isOwn && (
+                  <span className="chat-bubble__name">{msg.sender?.username || 'Unknown'}</span>
+                )}
+                <div className="chat-bubble__content">
+                  {editingId === msg._id ? (
+                    <div className="chat-bubble__edit">
+                      <input
+                        className="chat-bubble__edit-input"
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleEditSave(msg._id)}
+                        autoFocus
+                      />
+                      <button className="icon-btn icon-btn--sm" onClick={() => handleEditSave(msg._id)}>✓</button>
+                      <button className="icon-btn icon-btn--sm" onClick={() => setEditingId(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      {msg.imageUrl && (
+                        <div className="chat-bubble__image">
+                          <img src={msg.imageUrl} alt="Shared image" loading="lazy" />
+                        </div>
+                      )}
+                      <p className="chat-bubble__text">{msg.content}</p>
+                    </>
+                  )}
+                  <div className="chat-bubble__footer">
+                    {isOwn && readCount > 0 && (
+                      <span className="chat-bubble__views">👁 {readCount}</span>
                     )}
-                    <p className="chat-msg__text">{msg.content}</p>
-                  </>
-                )}
-                {/* Read receipt indicator for own messages */}
-                {isOwn && readCount > 0 && (
-                  <span className="chat-msg__read-receipt" title={`Read by ${readCount}`}>
-                    ✓✓ <span className="chat-msg__read-count">{readCount}</span>
-                  </span>
-                )}
+                    <span className="chat-bubble__time">{formatTime(msg.createdAt)}</span>
+                  </div>
+                  {/* Floating actions on hover */}
+                  {isOwn && editingId !== msg._id && (
+                    <div className="chat-bubble__actions">
+                      <button className="icon-btn icon-btn--sm" onClick={() => { setEditingId(msg._id); setEditText(msg.content); }} title="Edit">✎</button>
+                      <button className="icon-btn icon-btn--sm icon-btn--danger" onClick={() => handleDelete(msg._id)} title="Delete">🗑</button>
+                    </div>
+                  )}
+                </div>
               </div>
-              {isOwn && editingId !== msg._id && (
-                <div className="chat-msg__actions">
-                  <button className="icon-btn icon-btn--sm" onClick={() => { setEditingId(msg._id); setEditText(msg.content); }} title="Edit">✎</button>
-                  <button className="icon-btn icon-btn--sm icon-btn--danger" onClick={() => handleDelete(msg._id)} title="Delete">🗑</button>
+              {isOwn && (
+                <div className="chat-bubble__avatar">
+                  {user?.username?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
             </div>
@@ -238,7 +247,6 @@ export default function ChatPanel({ roomId, user }) {
         </div>
       )}
 
-      {/* Image Preview */}
       {imagePreview && (
         <div className="chat-panel__image-preview">
           <img src={imagePreview.url} alt="Preview" />
@@ -260,11 +268,11 @@ export default function ChatPanel({ roomId, user }) {
           title="Upload image (jpg, png, webp — max 5MB)"
           disabled={uploading}
         >
-          📎 Upload Image
+          📎
         </button>
         <input
           className="chat-panel__input"
-          placeholder="Type a message…"
+          placeholder="Your message"
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}

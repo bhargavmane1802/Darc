@@ -8,50 +8,50 @@
 
 /* ---- CSS Custom Properties ---- */
 :root {
-  /* Background layers */
-  --bg-base: #0a0b10;
-  --bg-surface: #12131a;
-  --bg-elevated: #1a1b25;
-  --bg-hover: #22232f;
-  --bg-active: #2a2b3a;
+  /* Background layers — LIGHT */
+  --bg-base: #F5F5FA;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #EEEEF4;
+  --bg-hover: #E8E8F0;
+  --bg-active: #DDDDE8;
 
-  /* Text */
-  --text-primary: #e8e9ed;
-  --text-secondary: #8b8d9a;
-  --text-muted: #5a5c6a;
-  --text-inverse: #0a0b10;
+  /* Text — DARK ON LIGHT */
+  --text-primary: #1A1A2E;
+  --text-secondary: #5A5A72;
+  --text-muted: #9A9AB0;
+  --text-inverse: #FFFFFF;
 
-  /* Accent — Violet */
-  --accent: #7C3AED;
-  --accent-light: #A78BFA;
-  --accent-lighter: #C4B5FD;
-  --accent-dark: #5B21B6;
-  --accent-glow: rgba(124, 58, 237, 0.25);
-  --accent-bg: rgba(124, 58, 237, 0.1);
+  /* Accent — Purple matching reference */
+  --accent: #7C6BFF;
+  --accent-light: #6C5CE7;
+  --accent-lighter: #A29BFE;
+  --accent-dark: #5B4BCF;
+  --accent-glow: rgba(124, 107, 255, 0.20);
+  --accent-bg: rgba(124, 107, 255, 0.08);
 
   /* Status */
-  --success: #34D399;
-  --success-bg: rgba(52, 211, 153, 0.12);
-  --error: #F87171;
-  --error-bg: rgba(248, 113, 113, 0.12);
-  --info: #60A5FA;
-  --info-bg: rgba(96, 165, 250, 0.12);
-  --warning: #FBBF24;
+  --success: #22C55E;
+  --success-bg: rgba(34, 197, 94, 0.10);
+  --error: #EF4444;
+  --error-bg: rgba(239, 68, 68, 0.10);
+  --info: #3B82F6;
+  --info-bg: rgba(59, 130, 246, 0.10);
+  --warning: #F59E0B;
 
-  /* Borders */
-  --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
-  --border-accent: rgba(124, 58, 237, 0.4);
+  /* Borders — subtle for light theme */
+  --border: rgba(0, 0, 0, 0.07);
+  --border-hover: rgba(0, 0, 0, 0.14);
+  --border-accent: rgba(124, 107, 255, 0.35);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 40px rgba(124, 58, 237, 0.15);
+  /* Shadows — softer */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 14px rgba(0,0,0,0.07);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.10);
+  --shadow-glow: 0 0 30px rgba(124, 107, 255, 0.12);
 
-  /* Glass */
-  --glass-bg: rgba(18, 19, 26, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  /* Glass — light frosted */
+  --glass-bg: rgba(255, 255, 255, 0.80);
+  --glass-border: rgba(0, 0, 0, 0.06);
 
   /* Spacing */
   --radius-sm: 6px;
@@ -90,8 +90,8 @@ body {
   overflow-x: hidden;
 }
 
-a { color: var(--accent-light); text-decoration: none; }
-a:hover { color: var(--accent-lighter); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-light); }
 
 h1, h2, h3 {
   font-weight: 700;
@@ -102,8 +102,8 @@ h1, h2, h3 {
 /* ---- Scrollbar ---- */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg-active); border-radius: var(--radius-full); }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-thumb { background: #CDCDD8; border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: #B0B0C0; }
 
 /* ---- Utility: Glass ---- */
 .glass {
@@ -112,6 +112,7 @@ h1, h2, h3 {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 /* ---- Buttons ---- */
@@ -241,8 +242,8 @@ h1, h2, h3 {
   display: inline-block;
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
+  border: 2px solid rgba(124,107,255,0.3);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -274,9 +275,9 @@ h1, h2, h3 {
   animation: toastIn 0.35s var(--ease) forwards;
   box-shadow: var(--shadow-lg);
 }
-.toast--success { background: var(--success-bg); color: var(--success); border-color: rgba(52,211,153,0.2); }
-.toast--error { background: var(--error-bg); color: var(--error); border-color: rgba(248,113,113,0.2); }
-.toast--info { background: var(--info-bg); color: var(--info); border-color: rgba(96,165,250,0.2); }
+.toast--success { background: var(--success-bg); color: var(--success); border-color: rgba(34,197,94,0.2); }
+.toast--error { background: var(--error-bg); color: var(--error); border-color: rgba(239,68,68,0.2); }
+.toast--info { background: var(--info-bg); color: var(--info); border-color: rgba(59,130,246,0.2); }
 .toast__icon { font-size: 16px; font-weight: 700; }
 
 @keyframes toastIn {
@@ -308,7 +309,7 @@ h1, h2, h3 {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--accent-light);
+  background: var(--accent);
   animation: typingBounce 1.2s infinite ease-in-out;
 }
 .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
@@ -324,7 +325,7 @@ h1, h2, h3 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-light);
+  background: var(--accent);
   animation: pulse 1s infinite;
   margin-left: 4px;
 }

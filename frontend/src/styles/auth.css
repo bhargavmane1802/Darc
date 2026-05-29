@@ -1,5 +1,5 @@
 /* ============================================
-   DARC — Auth Page
+   DARC — Auth Page (Light Theme)
    ============================================ */
 
 .auth-page {
@@ -10,6 +10,7 @@
   padding: 24px;
   position: relative;
   overflow: hidden;
+  background: var(--bg-base);
 }
 
 .auth-page__orb {
@@ -20,12 +21,12 @@
 }
 .auth-page__orb--1 {
   width: 500px; height: 500px;
-  background: radial-gradient(circle, rgba(124,58,237,0.2), transparent 70%);
+  background: radial-gradient(circle, rgba(124,107,255,0.12), transparent 70%);
   top: -150px; left: -100px;
 }
 .auth-page__orb--2 {
   width: 400px; height: 400px;
-  background: radial-gradient(circle, rgba(129,140,248,0.15), transparent 70%);
+  background: radial-gradient(circle, rgba(162,155,254,0.10), transparent 70%);
   bottom: -100px; right: -80px;
 }
 
@@ -36,6 +37,10 @@
   animation: slideUp 0.5s var(--ease);
   position: relative;
   z-index: 5;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .auth-card__header {
@@ -45,7 +50,7 @@
 
 .auth-card__logo {
   font-size: 36px;
-  color: var(--accent-light);
+  color: var(--accent);
   display: block;
   margin-bottom: 16px;
   filter: drop-shadow(0 0 12px var(--accent-glow));
@@ -56,6 +61,7 @@
   font-weight: 800;
   margin-bottom: 8px;
   letter-spacing: -0.5px;
+  color: var(--text-primary);
 }
 
 .auth-card__subtitle {
@@ -82,7 +88,7 @@
 .auth-card__toggle {
   background: none;
   border: none;
-  color: var(--accent-light);
+  color: var(--accent);
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
@@ -90,5 +96,5 @@
   transition: color var(--duration) var(--ease);
 }
 .auth-card__toggle:hover {
-  color: var(--accent-lighter);
+  color: var(--accent-light);
 }
