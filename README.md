@@ -2,7 +2,7 @@
 
 A **real-time developer collaboration platform** that combines instant messaging, collaborative journaling, and AI-powered insights. DARC enables distributed teams to communicate seamlessly, document shared knowledge, and receive intelligent feedback powered by Google's Generative AI.
 
-**Live Demo:** [darc-nine.vercel.app](https://darc-nine.vercel.app)
+**Live Demo:** [darc-pearl.vercel.app](https://darc-pearl.vercel.app/)
 
 ---
 
