@@ -65,7 +65,14 @@ const register = async (req, res, next) => {
         );
 
         await redis.expire(id, 86400);
-        await sendVerificationEmail(email,id);
+        try
+        {await sendVerificationEmail(email,id);}
+        catch(err){
+           return res.status(400).json({
+                message: "error in verification"
+            });
+
+        }
         // send a email with url domain/verify/id
         console.log("Verification Email sent");
         res.status(201).json({ message: "user register redirect to login page" });
