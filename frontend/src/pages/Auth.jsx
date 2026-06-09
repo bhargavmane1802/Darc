@@ -8,6 +8,7 @@ import '../styles/auth.css';
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ export default function Auth() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
+    if (!username.trim() || !password.trim() || (!isLogin && !email.trim())) {
       addToast('Please fill in all fields', 'error');
       return;
     }
@@ -32,8 +33,9 @@ export default function Auth() {
           addToast('Invalid credentials', 'error');
         }
       } else {
-        await apiRegister(username, password);
-        addToast('Account created! Please log in.', 'success');
+        await apiRegister(username, password, email);
+        addToast('Account created! Please check your email to verify your account.', 'success');
+        setEmail('');
         setIsLogin(true);
       }
     } catch (err) {
@@ -72,6 +74,20 @@ export default function Auth() {
               autoComplete="username"
             />
           </div>
+          {!isLogin && (
+            <div className="input-group">
+              <label htmlFor="auth-email" className="input-group__label">Email</label>
+              <input
+                id="auth-email"
+                type="email"
+                className="input-group__input"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+              />
+            </div>
+          )}
           <div className="input-group">
             <label htmlFor="auth-password" className="input-group__label">Password</label>
             <input

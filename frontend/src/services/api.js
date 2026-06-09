@@ -19,8 +19,8 @@ async function request(path, options = {}) {
 }
 
 // Auth
-export const apiRegister = (username, password) =>
-  request('/user/register', { method: 'POST', body: JSON.stringify({ username, password }) });
+export const apiRegister = (username, password, email) =>
+  request('/user/register', { method: 'POST', body: JSON.stringify({ username, password, email }) });
 
 export const apiLogin = (username, password) =>
   request('/user/login', { method: 'POST', body: JSON.stringify({ username, password }) });

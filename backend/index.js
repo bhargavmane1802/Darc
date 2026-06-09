@@ -1,6 +1,6 @@
 import mongoose from "mongoose"
 import express, { urlencoded } from "express"
-import dotenv from "dotenv"
+import dotenv from "dotenv/config"
 import userRoutes from "./src/routers/user.Router.js"
 import validate_auth from "./src/middlewares/auth.middlware.js"
 import { user_Model } from "./src/model/user.model.js"
@@ -12,7 +12,6 @@ import { initSocket } from "./src/sockets/socket.js"
 import startDigestJob from "./src/jobs/digest.job.js"
 import uploadRouter from "./src/routers/upload.routes.js"
 import cors from "cors";
-dotenv.config();
 const app = express();
 const server = http.createServer(app);
 initSocket(server);
