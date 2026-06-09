@@ -68,6 +68,7 @@ const register = async (req, res, next) => {
         try
         {await sendVerificationEmail(email,id);}
         catch(err){
+            console.log(err);
            return res.status(400).json({
                 message: "error in verification"
             });
