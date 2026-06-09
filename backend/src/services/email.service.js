@@ -1,5 +1,5 @@
-import transporter from "../config/mail.js";
-
+import { Resend } from "resend";
+const resend = new Resend("process.env.RESEND_API");
 export const sendVerificationEmail = async (
     email,
     token
@@ -7,11 +7,11 @@ export const sendVerificationEmail = async (
     const url =
         `${process.env.BACKEND_URL}/user/verify/${token}`;
 
-    await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: "Verify your email",
-        html: `
+        const { data, error } = await resend.emails.send({
+    from:process.env.EMAIL_USER,
+    to: [email],
+    subject: "Verify your email",
+    html:  `
             <h1>Email Verification</h1>
             <p>
                 Click the link below:
@@ -20,6 +20,7 @@ export const sendVerificationEmail = async (
             <a href="${url}">
                 Verify Account
             </a>
-        `
-    });
+        `,
+  });
 };
+
