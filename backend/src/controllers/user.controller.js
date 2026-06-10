@@ -83,7 +83,6 @@ const register = async (req, res, next) => {
     }
 }
 const verifyEmail = async(req,res,next)=>{
-    console.log('clink clicked')
     try {
         const {id}=req.params;
     const data = await redis.get(id);

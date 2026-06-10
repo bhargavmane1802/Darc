@@ -65,11 +65,21 @@ export const initSocket = (server) => {
     });
     //when ever the user leaves and switches form this room
     socket.on("switch_room",async(room_id)=>{
-      const roomKey = `room:${room_id}:presence`;
-      const memberData = user.username;
-      await redis.srem(roomKey,memberData);
-      const members= await redis.smembers(roomKey);
-      socket.to(room_id).emit("room_members",{ room_id, members}) 
+      try{
+        // Remove user from the old room's Redis presence set
+        const roomKey = `room:${room_id}:presence`;
+        const memberData = user.username;
+        await redis.srem(roomKey, memberData);
+
+        // Actually leave the socket room so no more events are received from it
+        socket.leave(room_id);
+
+        // Broadcast updated member list to EVERYONE remaining in the old room
+        const members = await redis.smembers(roomKey);
+        io.to(room_id).emit("room_members", { room_id, members });
+      } catch(err){
+        console.error("Switch Room Error:", err);
+      }
     })
 
     //user actually leaves the room

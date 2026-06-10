@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGetMyRooms } from '../services/api.js';
 
 export default function Sidebar({
-  user, rooms, setRooms, activeRoom, onSelectRoom, onLogout, onCreateRoom, onJoinRoom, onDeleteRoom, onLeaveRoom,
+  user, rooms, setRooms, activeRoom, onSelectRoom, onLogout, onCreateRoom, onJoinRoom, onDeleteRoom, onLeaveRoom, isDark, onToggleTheme,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -110,9 +110,18 @@ export default function Sidebar({
           </span>
           {!collapsed && <span className="sidebar__username">{user?.username}</span>}
         </div>
-        <button className="icon-btn icon-btn--danger" onClick={onLogout} title="Logout">
-          ⏻
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            className="theme-toggle"
+            onClick={onToggleTheme}
+            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {isDark ? '☀️' : '🌙'}
+          </button>
+          <button className="icon-btn icon-btn--danger" onClick={onLogout} title="Logout">
+            ⏻
+          </button>
+        </div>
       </div>
     </aside>
   );

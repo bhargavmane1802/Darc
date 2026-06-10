@@ -198,21 +198,24 @@ export default function JournalPanel({ roomId, user }) {
         )}
 
         <div className="journal-panel__compose-actions">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            style={{ display: 'none' }}
-            onChange={handleFileSelect}
-          />
-          <button
-            className="btn btn--ghost btn--sm btn--upload"
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach image (jpg, png, webp)"
-            disabled={uploading || loading}
-          >
-            📎 Image
-          </button>
+          <div className="journal-panel__compose-actions-left">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+            />
+            <button
+              className="btn btn--ghost btn--sm"
+              style={{ borderRadius: 'var(--radius-md)', padding: '6px 14px', gap: '6px' }}
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach image (jpg, png, webp)"
+              disabled={uploading || loading}
+            >
+              📎 Image
+            </button>
+          </div>
           <button className="btn btn--primary btn--sm" onClick={handleCreate} disabled={loading || uploading || (!newContent.trim() && !imagePreview)}>
             {loading || uploading ? <span className="spinner" /> : 'Post Entry'}
           </button>

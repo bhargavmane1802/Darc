@@ -551,8 +551,14 @@
 }
 .journal-panel__compose-actions {
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
   align-items: center;
+  gap: 10px;
+}
+.journal-panel__compose-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .journal-panel__textarea {
   background: var(--bg-base);

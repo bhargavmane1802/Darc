@@ -24,6 +24,22 @@ export default function AppShell() {
   const [showMembers, setShowMembers] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
 
+  // Dark / Light mode — persisted in localStorage
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('darc-theme') === 'dark');
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.setAttribute('data-theme', 'dark');
+      localStorage.setItem('darc-theme', 'dark');
+    } else {
+      root.removeAttribute('data-theme');
+      localStorage.setItem('darc-theme', 'light');
+    }
+  }, [isDark]);
+
+  const handleToggleTheme = () => setIsDark((prev) => !prev);
+
   // Track active room ID in a ref so socket handlers always have latest value
   const activeRoomRef = useRef(null);
   useEffect(() => {
@@ -68,15 +84,18 @@ export default function AppShell() {
   const handleSelectRoom = useCallback((room) => {
   const socket = getSocket();
 
-  // remove user from previous room presence cache
-  if (socket && activeRoomRef.current) {
-    socket.emit("switch_room", activeRoomRef.current);
+  // Capture the previous room ID NOW, before any state changes
+  const previousRoomId = activeRoomRef.current;
 
-    // optional but recommended:
-    // socket.emit("leave_room_socket", activeRoomRef.current);
+  // Remove user from previous room presence + leave the socket room
+  if (socket && previousRoomId && previousRoomId !== room._id) {
+    socket.emit("switch_room", previousRoomId);
   }
 
-  // switch to new room
+  // Clear stale member list immediately so the count resets between rooms
+  setMembers([]);
+
+  // Switch to new room
   setActiveRoom(room);
   setActiveTab('chat');
   setInviteCopied(false);
@@ -160,6 +179,8 @@ export default function AppShell() {
         onJoinRoom={() => setShowModal('join')}
         onDeleteRoom={handleDeleteRoom}
         onLeaveRoom={handleLeaveRoom}
+        isDark={isDark}
+        onToggleTheme={handleToggleTheme}
       />
 
       <main className="app-shell__main">
