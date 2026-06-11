@@ -43,18 +43,21 @@ export const initSocket = (server) => {
         const roomKey = `room:${room_id}:presence`;
         const memberData = user.username;
         // 1. Redis Operations
-        await redis.sadd(roomKey, memberData);
-        await redis.expire(roomKey, 180);//for testing purposes 
+        const [, , members] = await redis
+            .multi()
+            .sadd(roomKey, memberData)
+            .expire(roomKey, 180)
+            .smembers(roomKey)
+            .exec();
 
-        // 2. Fetch and Broadcast Members
-        const members = await redis.smembers(roomKey);
-        io.to(room_id).emit("room_members", { room_id, members });
+        io.to(room_id).emit("room_members", { room_id, members:members[1] });
 
         // 3. Fetch History
         const history = await message_Model.find({ room: room_id })
           .sort({ createdAt: -1 })
           .limit(30)
-          .populate("sender", "username");
+          .populate("sender", "username")
+          .lean(); // as it is read only
         
         socket.emit("message_display", history.reverse());
 
@@ -69,14 +72,19 @@ export const initSocket = (server) => {
         // Remove user from the old room's Redis presence set
         const roomKey = `room:${room_id}:presence`;
         const memberData = user.username;
-        await redis.srem(roomKey, memberData);
+        const [,members]=await redis
+        .multi()
+        .srem(roomKey, memberData)
+        .smembers(roomKey)
+        .exec()
+        // await redis.srem(roomKey, memberData);
 
         // Actually leave the socket room so no more events are received from it
         socket.leave(room_id);
 
         // Broadcast updated member list to EVERYONE remaining in the old room
-        const members = await redis.smembers(roomKey);
-        io.to(room_id).emit("room_members", { room_id, members });
+        // const members = await redis.smembers(roomKey);
+        io.to(room_id).emit("room_members", { room_id, members:members[1] });
       } catch(err){
         console.error("Switch Room Error:", err);
       }
@@ -96,15 +104,12 @@ export const initSocket = (server) => {
         socket.leave(room_id);
         const roomKey = `room:${room_id}:presence`;
         const memberData =  user.username;
-        await redis.srem(roomKey,memberData);
-        const members = await redis.smembers(roomKey);
-        //this optipizes it furthur
-        // const [, members] = await redis
-        //   .multi()
-        //   .srem(roomKey, user.username)
-        //   .smembers(roomKey)
-        //   .exec();
-        io.to(room_id).emit("room_members", { room_id, members});
+        const [, members] = await redis
+          .multi()
+          .srem(roomKey, user.username)
+          .smembers(roomKey)
+          .exec();
+        io.to(room_id).emit("room_members", { room_id, members:members[1]});
       }
       catch(err){
         console.error("leave Room Error:", err);
@@ -195,15 +200,21 @@ socket.on("disconnecting", async () => {
       const roomKey = `room:${room_id}:presence`;
 
       // remove username from redis set
-      await redis.srem(roomKey, user.username);
+      const [,members]=await redis
+        .multi()
+        .srem(roomKey, user.username)
+        .smembers(roomKey)
+        .exec()
 
-      // get updated members
-      const members = await redis.smembers(roomKey);
+      // await redis.srem(roomKey, user.username);
+
+      // // get updated members
+      // const members = await redis.smembers(roomKey);
 
       // notify remaining users
       io.to(room_id).emit("room_members", {
         room_id,
-        members
+        members:members[1]
       });
     }
 

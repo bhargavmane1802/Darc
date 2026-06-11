@@ -5,40 +5,41 @@ import { generateEmbeddings, getAIFeedback } from "../services/ai.service.js";
 import message_Model from "../model/message.model.js";
 import redis from "../config/redis.js";
 import { pineconeIndex } from "../config/pinecone.js";
+import { journalQueue } from "../queue/journal.queue.js";
 const createEntries = async (req, res, next) => {
     try {
         const { roomId } = req.params;
         const { id } = req.user;
         const {content, imageUrl} = req.body;
         if (!id || (!content && !imageUrl)) return res.status(404).json({ message: "Insufficient" });
-        const embedding = await generateEmbeddings(content);
+        // const embedding = await generateEmbeddings(content);
         const journal = new journal_Model({
             author: id,
             room: roomId,
             content: content,
             imageUrl: imageUrl || null,
-            embedding:embedding,
         })
-
-        await journal.save();
-        if (content && embedding.length > 0) {
-            await pineconeIndex.upsert({
-                records: [{
-                    id: journal._id.toString(), // Cross-referenced via Mongo ID
-                values: embedding,
-                metadata: {
-                    roomId: roomId.toString(),
-                    authorId: id.toString(),
-                    content: content,
-                    aiResponse: ""
-                }
-                }]
-            });
-        }
+        const result =await journal.save();
+        if(content){await journalQueue.add('createEmbedding',{journalId:result.id,content},{attempts: 3,backoff: { type: 'exponential', delay: 2000}});}
+        console.log("added to queue")
+        // if (content && embedding.length > 0) {
+        //     await pineconeIndex.upsert({
+        //         records: [{
+        //             id: journal._id.toString(), // Cross-referenced via Mongo ID
+        //         values: embedding,
+        //         metadata: {
+        //             roomId: roomId.toString(),
+        //             authorId: id.toString(),
+        //             content: content,
+        //             aiResponse: ""
+        //         }
+        //         }]
+        //     });
+        // }
         
-        await journal.populate("author", "username");
+        await result.populate("author", "username");
         const io=getIO();
-        io.to(roomId).emit("create_journal",journal);
+        io.to(roomId).emit("create_journal",result);
         return res.status(201).json("journal entry created");
         
     }

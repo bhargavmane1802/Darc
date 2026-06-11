@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 DARCrecords.txt
 laterchanges
+socket-connect.yml

@@ -11,6 +11,7 @@ import http from "http"
 import { initSocket } from "./src/sockets/socket.js"
 import startDigestJob from "./src/jobs/digest.job.js"
 import uploadRouter from "./src/routers/upload.routes.js"
+import './src/workers/journal.worker.js'
 import cors from "cors";
 const app = express();
 const server = http.createServer(app);
