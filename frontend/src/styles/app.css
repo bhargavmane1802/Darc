@@ -1035,20 +1035,19 @@
 
 /* ============================================
    SMALL TABLET / LARGE PHONE  —  ≤768px
-   Sidebar becomes a slim icon rail.
+   Sidebar stays on left, shows room names.
    Member list panel is hidden.
    Room header simplifies.
    ============================================ */
 @media (max-width: 768px) {
-  /* ---- Sidebar: icon-only rail ---- */
+  /* ---- Sidebar: compact left panel with room names ---- */
   .sidebar {
-    width: 56px;
-    min-width: 56px;
+    width: 200px;
+    min-width: 200px;
   }
 
-  .sidebar__brand-name,
+  /* Only hide non-essential decorative labels, keep room names */
   .sidebar__section-title,
-  .sidebar__room-name,
   .sidebar__empty span,
   .sidebar__username {
     display: none;
@@ -1240,95 +1239,85 @@
 
 /* ============================================
    PHONE  —  ≤480px
-   Sidebar converts to a bottom navigation bar.
-   Full-width panels. Touch-optimised targets.
+   Sidebar stays on LEFT as a narrow panel.
+   Room names stay visible with compact text.
+   Touch-optimised targets throughout.
    ============================================ */
 @media (max-width: 480px) {
-  /* ---- Convert sidebar to bottom nav bar ---- */
-  .app-shell {
-    flex-direction: column-reverse; /* sidebar goes to bottom */
-  }
-
+  /* ---- Sidebar: narrow left panel (NOT bottom nav) ---- */
   .sidebar {
-    width: 100%;
-    min-width: unset;
-    height: 56px;
-    min-height: 56px;
-    flex-direction: row;
-    border-right: none;
-    border-top: 1px solid var(--border);
-    overflow: hidden;
-    align-items: center;
-    justify-content: space-around;
-    flex-shrink: 0;
-    padding: 0 4px;
-  }
-
-  /* Hide structural sidebar sections not needed in bottom nav */
-  .sidebar__header,
-  .sidebar__actions,
-  .sidebar__section-title,
-  .sidebar__empty,
-  .sidebar__username,
-  .sidebar__brand-name {
-    display: none;
-  }
-
-  /* Rooms become horizontal scrollable icon strip */
-  .sidebar__rooms {
-    display: flex;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0;
-    flex: 1;
-    align-items: center;
-    gap: 0;
-    scrollbar-width: none;
-  }
-  .sidebar__rooms::-webkit-scrollbar {
-    display: none;
-  }
-
-  .sidebar__room {
-    flex-shrink: 0;
-  }
-
-  .sidebar__room-btn {
-    padding: 8px 10px;
-    justify-content: center;
-  }
-
-  .sidebar__room-name,
-  .sidebar__room-delete,
-  .sidebar__room-leave {
-    display: none;
-  }
-
-  /* Footer becomes a compact group on the right of the bottom nav */
-  .sidebar__footer {
-    flex-direction: row;
+    width: 160px;
+    min-width: 160px;
+    /* Keep the existing column flex-direction */
+    flex-direction: column;
+    border-right: 1px solid var(--border);
     border-top: none;
-    padding: 0 4px;
-    gap: 4px;
-    flex-shrink: 0;
   }
 
-  .sidebar__user {
-    display: none; /* hide avatar in bottom nav — too cramped */
+  /* Keep room names visible — only hide low-priority labels */
+  .sidebar__section-title,
+  .sidebar__username {
+    display: none;
   }
 
-  /* ---- Main content takes all vertical space ---- */
-  .app-shell__main {
-    flex: 1;
-    min-height: 0;
+  /* Brand: shrink but keep icon + name */
+  .sidebar__brand-name {
+    font-size: 14px;
+  }
+
+  .sidebar__header {
+    padding: 12px;
+  }
+
+  /* Action buttons: fit inside 160px */
+  .sidebar__actions {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .sidebar__actions .btn {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  /* Room list items: show name, compact spacing */
+  .sidebar__room-btn {
+    padding: 9px 10px;
+    gap: 6px;
+  }
+
+  .sidebar__room-name {
+    display: block;        /* VISIBLE on phone */
+    font-size: 12px;
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  /* ---- Room header: ultra-compact ---- */
+  .sidebar__room-hash {
+    font-size: 13px;
+  }
+
+  /* Footer: stack avatar + controls vertically */
+  .sidebar__footer {
+    flex-direction: column;
+    padding: 10px;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  /* Show avatar icon; hide full username text */
+  .sidebar__user {
+    display: flex;
+  }
+  .sidebar__username {
+    display: none;
+  }
+
+  /* ---- Room header: compact ---- */
   .room-header {
     padding: 8px 10px;
     gap: 4px;
+    flex-wrap: wrap;
   }
 
   .room-header__name {
@@ -1349,7 +1338,7 @@
     font-size: 11px;
   }
 
-  /* Hide invite button text; show icon only */
+  /* Invite button: icon only */
   .invite-btn__text {
     display: none;
   }
@@ -1410,9 +1399,8 @@
     font-size: 10px;
   }
 
-  /* Edit input: full width on mobile */
   .chat-bubble__edit-input {
-    min-width: 100px;
+    min-width: 80px;
     font-size: 12px;
   }
 
@@ -1466,7 +1454,7 @@
     max-width: 100%;
   }
 
-  /* ---- Modal: full-screen sheet ---- */
+  /* ---- Modal: slide-up sheet ---- */
   .modal-overlay {
     align-items: flex-end;
   }
@@ -1484,14 +1472,14 @@
     font-size: 18px;
   }
 
-  /* ---- Member list (in modal / overlay) ---- */
+  /* ---- Member panel ---- */
   .room-body__members {
     display: none;
   }
 
   /* ---- Toast ---- */
   .toast-container {
-    bottom: 68px; /* above bottom nav */
+    bottom: 16px;
     right: 10px;
     left: 10px;
   }
@@ -1508,21 +1496,23 @@
   .app-shell__empty p {
     font-size: 13px;
     text-align: center;
-    padding: 0 16px;
+    padding: 0 8px;
   }
 
   .app-shell__empty-actions {
     flex-direction: column;
     gap: 8px;
     width: 100%;
-    max-width: 240px;
+    max-width: 200px;
   }
 
   .app-shell__empty-actions .btn {
     width: 100%;
+    font-size: 13px;
+    padding: 9px 14px;
   }
 
-  /* ---- Reaction pills: wrap nicely ---- */
+  /* ---- Reaction pills ---- */
   .journal-entry__reactions {
     gap: 4px;
   }
