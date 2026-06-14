@@ -64,7 +64,7 @@ const register = async (req, res, next) => {
             })
         );
 
-        await redis.expire(id, 86400);
+        await redis.expire(id, 300);
         try
         {await sendVerificationEmail(email,id);}
         catch(err){

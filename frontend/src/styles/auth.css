@@ -98,3 +98,99 @@
 .auth-card__toggle:hover {
   color: var(--accent-light);
 }
+
+/* ============================================
+   DARC — Auth Page Responsive Media Queries
+   ============================================ */
+
+/* ---- Tablet  (≤768px) ---- */
+@media (max-width: 768px) {
+  .auth-page {
+    padding: 20px 16px;
+    align-items: center;
+  }
+
+  .auth-card {
+    padding: 32px 28px;
+  }
+
+  .auth-card__title {
+    font-size: 24px;
+  }
+
+  .auth-card__logo {
+    font-size: 30px;
+  }
+}
+
+/* ---- Phone  (≤480px) ---- */
+@media (max-width: 480px) {
+  .auth-page {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 48px;
+  }
+
+  /* Orbs shrink so they don't distract on small screens */
+  .auth-page__orb--1 {
+    width: 280px;
+    height: 280px;
+    top: -80px;
+    left: -60px;
+  }
+  .auth-page__orb--2 {
+    width: 220px;
+    height: 220px;
+    bottom: -60px;
+    right: -40px;
+  }
+
+  .auth-card {
+    padding: 28px 20px 32px;
+    border-radius: var(--radius-lg);
+    /* On very small phones, let it fill the screen width */
+    max-width: 100%;
+  }
+
+  .auth-card__header {
+    margin-bottom: 24px;
+  }
+
+  .auth-card__logo {
+    font-size: 28px;
+    margin-bottom: 12px;
+  }
+
+  .auth-card__title {
+    font-size: 22px;
+    letter-spacing: -0.3px;
+  }
+
+  .auth-card__subtitle {
+    font-size: 13px;
+  }
+
+  .auth-card__form {
+    gap: 16px;
+  }
+
+  .auth-card__footer {
+    font-size: 13px;
+    margin-top: 20px;
+  }
+}
+
+/* ---- Tiny Phone  (≤360px) ---- */
+@media (max-width: 360px) {
+  .auth-card {
+    padding: 24px 16px 28px;
+  }
+
+  .auth-card__title {
+    font-size: 20px;
+  }
+
+  .auth-card__form {
+    gap: 14px;
+  }
+}

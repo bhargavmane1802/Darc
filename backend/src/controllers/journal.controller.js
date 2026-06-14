@@ -12,7 +12,6 @@ const createEntries = async (req, res, next) => {
         const { id } = req.user;
         const {content, imageUrl} = req.body;
         if (!id || (!content && !imageUrl)) return res.status(404).json({ message: "Insufficient" });
-        // const embedding = await generateEmbeddings(content);
         const journal = new journal_Model({
             author: id,
             room: roomId,
@@ -22,21 +21,6 @@ const createEntries = async (req, res, next) => {
         const result =await journal.save();
         if(content){await journalQueue.add('createEmbedding',{journalId:result.id,content},{attempts: 3,backoff: { type: 'exponential', delay: 2000}});}
         console.log("added to queue")
-        // if (content && embedding.length > 0) {
-        //     await pineconeIndex.upsert({
-        //         records: [{
-        //             id: journal._id.toString(), // Cross-referenced via Mongo ID
-        //         values: embedding,
-        //         metadata: {
-        //             roomId: roomId.toString(),
-        //             authorId: id.toString(),
-        //             content: content,
-        //             aiResponse: ""
-        //         }
-        //         }]
-        //     });
-        // }
-        
         await result.populate("author", "username");
         const io=getIO();
         io.to(roomId).emit("create_journal",result);
@@ -52,7 +36,10 @@ const createEntries = async (req, res, next) => {
 const displayEntries = async (req, res, next) => {
     try {
         const { roomId } = req.params;
-        const journal = await journal_Model.find({ room: roomId }).populate("author","username");
+        const journal = await journal_Model.find({ room: roomId })
+        .select("_id author room content imageUrl reaction createdAt updatedAt aiResponse")
+        .populate("author","username")
+        .lean();
         return res.send(journal);
         //pagation
         // 10 in one page

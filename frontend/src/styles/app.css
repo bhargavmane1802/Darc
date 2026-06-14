@@ -933,21 +933,11 @@
   color: var(--accent-light);
 }
 
-/* ---- Responsive ---- */
-@media (max-width: 768px) {
-  .sidebar { width: 64px; min-width: 64px; }
-  .sidebar__brand-name,
-  .sidebar__section-title,
-  .sidebar__room-name,
-  .sidebar__empty span,
-  .sidebar__username { display: none; }
-  .sidebar__actions .btn { font-size: 0; padding: 10px; }
-  .sidebar__actions .btn::before { font-size: 16px; }
-  .room-body__members { display: none; }
-  .room-header { padding: 12px 16px; }
-  .chat-panel__messages { padding: 12px 16px; }
-  .chat-panel__input-bar { padding: 12px 16px; }
-}
+/* ============================================
+   DARC — Responsive Media Queries (App Shell)
+   ============================================ */
+
+/* ---- Shared layout helpers ---- */
 .room-body__content {
   position: relative;
   height: 100%;
@@ -958,7 +948,6 @@
   position: absolute;
   inset: 0;
   overflow-y: auto;
-
   opacity: 0;
   pointer-events: none;
 }
@@ -987,6 +976,559 @@
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
 }
-.chat-panel__messages {
-  flex: 1;
+
+/* ============================================
+   TABLET  —  769px … 1024px
+   Sidebar collapses to icon rail; member panel
+   is hidden by default but can be toggled.
+   ============================================ */
+@media (max-width: 1024px) {
+  /* Collapse sidebar to icon rail */
+  .sidebar {
+    width: 64px;
+    min-width: 64px;
+  }
+
+  /* Hide all text labels in the collapsed rail */
+  .sidebar__brand-name,
+  .sidebar__section-title,
+  .sidebar__username {
+    display: none;
+  }
+
+  /* Icon-only action buttons */
+  .sidebar__actions .btn--full {
+    padding: 10px;
+    font-size: 0; /* hide text */
+  }
+
+  /* Room body: hide members panel to save space */
+  .room-body__members {
+    width: 200px;
+    min-width: 200px;
+  }
+
+  /* Slightly compact header */
+  .room-header {
+    padding: 10px 16px;
+  }
+  .room-header__name {
+    font-size: 16px;
+  }
+
+  /* Chat bubbles: slightly wider on smaller screens */
+  .chat-bubble {
+    max-width: 85%;
+  }
+
+  /* Journal entries: reduce padding */
+  .journal-panel {
+    padding: 16px;
+  }
+
+  /* Modal: prevent edge overflow */
+  .modal {
+    max-width: 95vw;
+    padding: 24px;
+  }
+}
+
+/* ============================================
+   SMALL TABLET / LARGE PHONE  —  ≤768px
+   Sidebar becomes a slim icon rail.
+   Member list panel is hidden.
+   Room header simplifies.
+   ============================================ */
+@media (max-width: 768px) {
+  /* ---- Sidebar: icon-only rail ---- */
+  .sidebar {
+    width: 56px;
+    min-width: 56px;
+  }
+
+  .sidebar__brand-name,
+  .sidebar__section-title,
+  .sidebar__room-name,
+  .sidebar__empty span,
+  .sidebar__username {
+    display: none;
+  }
+
+  .sidebar__header {
+    padding: 12px 10px;
+    justify-content: center;
+  }
+
+  /* Hide the collapse toggle button — always icon-rail on mobile */
+  .sidebar__header .icon-btn {
+    display: none;
+  }
+
+  .sidebar__logo {
+    font-size: 20px;
+  }
+
+  .sidebar__actions {
+    padding: 10px 8px;
+    gap: 6px;
+  }
+  .sidebar__actions .btn {
+    font-size: 0;
+    padding: 10px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sidebar__room-btn {
+    padding: 10px;
+    justify-content: center;
+  }
+
+  .sidebar__room-hash {
+    font-size: 18px;
+  }
+
+  /* Hide delete/leave on hover — show always on mobile for touch */
+  .sidebar__room-delete,
+  .sidebar__room-leave {
+    display: none;
+  }
+
+  .sidebar__footer {
+    flex-direction: column;
+    padding: 10px 8px;
+    gap: 6px;
+  }
+
+  .sidebar__footer > div {
+    gap: 4px;
+  }
+
+  /* ---- Room header ---- */
+  .room-header {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .room-header__name {
+    font-size: 15px;
+  }
+
+  .room-header__subtitle {
+    font-size: 11px;
+  }
+
+  .room-header__actions {
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  /* Invite button: icon only on small screens */
+  .invite-btn__text {
+    display: none;
+  }
+
+  /* Tab buttons: compact */
+  .tab-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* ---- Member panel ---- */
+  .room-body__members {
+    display: none;
+  }
+
+  /* ---- Chat panel ---- */
+  .chat-panel__messages {
+    padding: 10px 12px;
+    gap: 4px;
+  }
+
+  .chat-panel__input-bar {
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .chat-panel__input {
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+
+  /* Chat bubbles: wider on mobile */
+  .chat-bubble {
+    max-width: 88%;
+  }
+
+  .chat-bubble__avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .chat-bubble__content {
+    padding: 8px 12px;
+  }
+
+  .chat-bubble__text {
+    font-size: 13px;
+  }
+
+  /* ---- Journal panel ---- */
+  .journal-panel {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .journal-panel__compose {
+    padding: 14px;
+  }
+
+  .journal-entry {
+    padding: 14px;
+  }
+
+  .journal-entry__image {
+    max-width: 100%;
+  }
+
+  /* ---- Modal ---- */
+  .modal-overlay {
+    align-items: flex-end; /* slide up from bottom on mobile */
+  }
+
+  .modal {
+    max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 24px 20px 32px;
+    animation: slideUp 0.3s var(--ease);
+  }
+
+  /* ---- Empty state ---- */
+  .app-shell__empty h2 {
+    font-size: 20px;
+  }
+
+  .app-shell__empty p {
+    font-size: 13px;
+  }
+
+  .app-shell__empty-actions {
+    flex-direction: column;
+    width: 100%;
+    max-width: 260px;
+  }
+
+  .app-shell__empty-actions .btn {
+    width: 100%;
+  }
+
+  /* ---- Toast: move above potential bottom nav ---- */
+  .toast-container {
+    bottom: 16px;
+    right: 12px;
+    left: 12px;
+  }
+
+  .toast {
+    width: 100%;
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+}
+
+/* ============================================
+   PHONE  —  ≤480px
+   Sidebar converts to a bottom navigation bar.
+   Full-width panels. Touch-optimised targets.
+   ============================================ */
+@media (max-width: 480px) {
+  /* ---- Convert sidebar to bottom nav bar ---- */
+  .app-shell {
+    flex-direction: column-reverse; /* sidebar goes to bottom */
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: unset;
+    height: 56px;
+    min-height: 56px;
+    flex-direction: row;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+    align-items: center;
+    justify-content: space-around;
+    flex-shrink: 0;
+    padding: 0 4px;
+  }
+
+  /* Hide structural sidebar sections not needed in bottom nav */
+  .sidebar__header,
+  .sidebar__actions,
+  .sidebar__section-title,
+  .sidebar__empty,
+  .sidebar__username,
+  .sidebar__brand-name {
+    display: none;
+  }
+
+  /* Rooms become horizontal scrollable icon strip */
+  .sidebar__rooms {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+    flex: 1;
+    align-items: center;
+    gap: 0;
+    scrollbar-width: none;
+  }
+  .sidebar__rooms::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar__room {
+    flex-shrink: 0;
+  }
+
+  .sidebar__room-btn {
+    padding: 8px 10px;
+    justify-content: center;
+  }
+
+  .sidebar__room-name,
+  .sidebar__room-delete,
+  .sidebar__room-leave {
+    display: none;
+  }
+
+  /* Footer becomes a compact group on the right of the bottom nav */
+  .sidebar__footer {
+    flex-direction: row;
+    border-top: none;
+    padding: 0 4px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .sidebar__user {
+    display: none; /* hide avatar in bottom nav — too cramped */
+  }
+
+  /* ---- Main content takes all vertical space ---- */
+  .app-shell__main {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ---- Room header: ultra-compact ---- */
+  .room-header {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .room-header__name {
+    font-size: 14px;
+  }
+
+  .room-header__subtitle {
+    display: none;
+  }
+
+  .room-header__tabs {
+    gap: 2px;
+    padding: 2px;
+  }
+
+  .tab-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  /* Hide invite button text; show icon only */
+  .invite-btn__text {
+    display: none;
+  }
+  .invite-btn {
+    padding: 5px 8px;
+  }
+
+  /* ---- Chat ---- */
+  .chat-panel__messages {
+    padding: 8px 10px;
+  }
+
+  .chat-panel__input-bar {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .chat-panel__input {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .btn--send {
+    width: 38px;
+    height: 38px;
+    font-size: 15px;
+    padding: 8px;
+  }
+
+  .btn--upload {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  /* Chat bubbles: near full-width on phones */
+  .chat-bubble {
+    max-width: 92%;
+  }
+
+  .chat-bubble__avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .chat-bubble__content {
+    padding: 7px 10px;
+    border-radius: 14px;
+  }
+
+  .chat-bubble__text {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .chat-bubble__time {
+    font-size: 10px;
+  }
+
+  /* Edit input: full width on mobile */
+  .chat-bubble__edit-input {
+    min-width: 100px;
+    font-size: 12px;
+  }
+
+  /* ---- Image preview ---- */
+  .chat-panel__image-preview {
+    padding: 6px 10px;
+  }
+
+  .chat-panel__image-preview img {
+    height: 44px;
+  }
+
+  /* ---- Journal ---- */
+  .journal-panel {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .journal-panel__compose {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .journal-panel__textarea {
+    font-size: 13px;
+    min-height: 52px;
+  }
+
+  .journal-entry {
+    padding: 10px;
+  }
+
+  .journal-entry__name {
+    font-size: 13px;
+  }
+
+  .journal-entry__date {
+    font-size: 11px;
+  }
+
+  .journal-entry__content {
+    font-size: 13px;
+  }
+
+  .journal-entry__ai {
+    font-size: 12px;
+    padding: 10px;
+  }
+
+  .journal-entry__image {
+    max-width: 100%;
+  }
+
+  /* ---- Modal: full-screen sheet ---- */
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-width: 100%;
+    width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: 20px 16px 28px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal__title {
+    font-size: 18px;
+  }
+
+  /* ---- Member list (in modal / overlay) ---- */
+  .room-body__members {
+    display: none;
+  }
+
+  /* ---- Toast ---- */
+  .toast-container {
+    bottom: 68px; /* above bottom nav */
+    right: 10px;
+    left: 10px;
+  }
+
+  /* ---- Empty state ---- */
+  .app-shell__empty-icon {
+    font-size: 40px;
+  }
+
+  .app-shell__empty h2 {
+    font-size: 18px;
+  }
+
+  .app-shell__empty p {
+    font-size: 13px;
+    text-align: center;
+    padding: 0 16px;
+  }
+
+  .app-shell__empty-actions {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 240px;
+  }
+
+  .app-shell__empty-actions .btn {
+    width: 100%;
+  }
+
+  /* ---- Reaction pills: wrap nicely ---- */
+  .journal-entry__reactions {
+    gap: 4px;
+  }
+
+  .reaction-pill {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
 }
