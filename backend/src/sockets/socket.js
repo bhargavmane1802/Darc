@@ -38,6 +38,11 @@ export const initSocket = (server) => {
     // joins room //who all are live
     socket.on("join_room",async({room_id})=>{
       try {
+        // Guard: if the socket is already in this room, do not re-join.
+        // Re-joining causes Socket.IO to deliver subsequent io.to(room_id).emit()
+        // calls multiple times to the same client, breaking the member count display.
+        if (socket.rooms.has(room_id)) return;
+
         socket.join(room_id);
         
         const roomKey = `room:${room_id}:presence`;

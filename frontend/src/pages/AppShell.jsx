@@ -82,13 +82,18 @@ export default function AppShell() {
   }, [activeRoom?._id]);
 
   const handleSelectRoom = useCallback((room) => {
+  // Guard: if the clicked room is already active, do nothing.
+  // Without this, setMembers([]) would wipe the list and join_room
+  // would be skipped (same _id), leaving the count permanently at 0.
+  if (activeRoomRef.current === room._id) return;
+
   const socket = getSocket();
 
   // Capture the previous room ID NOW, before any state changes
   const previousRoomId = activeRoomRef.current;
 
   // Remove user from previous room presence + leave the socket room
-  if (socket && previousRoomId && previousRoomId !== room._id) {
+  if (socket && previousRoomId) {
     socket.emit("switch_room", previousRoomId);
   }
 
