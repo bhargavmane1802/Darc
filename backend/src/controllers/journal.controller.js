@@ -5,24 +5,25 @@ import { generateEmbeddings, getAIFeedback } from "../services/ai.service.js";
 import message_Model from "../model/message.model.js";
 import redis from "../config/redis.js";
 import { pineconeIndex } from "../config/pinecone.js";
-import { journalQueue } from "../queue/journal.queue.js";
-const createEntries = async (req, res, next) => {
+// import { journalQueue } from "../queue/journal.queue.js";
+const createEntries = (JournalModel = journal_Model,queue = journalQueue,getSocketIO = getIO)=>{
+    return async (req, res, next) => {
     try {
         const { roomId } = req.params;
         const { id } = req.user;
         const {content, imageUrl} = req.body;
         if (!id || (!content && !imageUrl)) return res.status(404).json({ message: "Insufficient" });
-        const journal = new journal_Model({
+        const journal = new JournalModel({
             author: id,
             room: roomId,
             content: content,
             imageUrl: imageUrl || null,
         })
         const result =await journal.save();
-        if(content){await journalQueue.add('createEmbedding',{journalId:result.id,content},{attempts: 3,backoff: { type: 'exponential', delay: 2000}});}
-        console.log("added to queue")
+        if(content){await queue.add('createEmbedding',{journalId:result.id,content},{attempts: 3,backoff: { type: 'exponential', delay: 2000}});}
+        console.log("added to journal entry for embedding in the queue")
         await result.populate("author", "username");
-        const io=getIO();
+        const io=getSocketIO();
         io.to(roomId).emit("create_journal",result);
         return res.status(201).json("journal entry created");
         
@@ -32,6 +33,7 @@ const createEntries = async (req, res, next) => {
         err.message="Failed createEntries";
         next(err);
     }
+}
 }
 const displayEntries = async (req, res, next) => {
     try {

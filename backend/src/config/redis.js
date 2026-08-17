@@ -4,6 +4,9 @@ import Redis from "ioredis";
 const redis = new Redis(process.env.REDIS_URL ||{
   host: "127.0.0.1",
   port: 6379,
+  lazyConnect: true,        
+  enableOfflineQueue: false,
+  maxRetriesPerRequest: null,
 });
 
 redis.on("connect", () => console.log("Connected to Redis"));

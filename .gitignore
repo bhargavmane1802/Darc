@@ -25,3 +25,6 @@ dist-ssr
 DARCrecords.txt
 laterchanges
 socket-connect.yml
+Dockerfile
+dockerIgnore
+darc.yml

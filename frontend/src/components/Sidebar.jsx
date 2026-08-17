@@ -69,6 +69,7 @@ export default function Sidebar({
                   className="sidebar__room-btn"
                   onClick={() => onSelectRoom(r)}
                   title={r.name}
+                  disabled={activeRoom?._id === r._id}
                 >
                   <span className="sidebar__room-hash">#</span>
                   {!collapsed && <span className="sidebar__room-name">{r.name}</span>}

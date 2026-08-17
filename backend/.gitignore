@@ -1,0 +1,4 @@
+.dockerIgnore
+Dockerfile
+test 
+benchmarks
