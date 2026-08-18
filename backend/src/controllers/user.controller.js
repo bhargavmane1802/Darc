@@ -65,6 +65,7 @@ const register = (
             });
         }
         const hashed_password = await bcryptLib.hash(password, 10);
+        /*
         const id = generateId(10);
         await redisClient.set(
             id,
@@ -88,6 +89,15 @@ const register = (
         }
         // send a email with url domain/verify/id
         console.log("Verification Email sent");
+        */
+
+        const newuser = new UserModel({
+            username,
+            password: hashed_password,
+            email
+        });
+        await newuser.save();
+
         res.status(201).json({ message: "user register redirect to login page" });
     }
     catch (err) {
