@@ -6,8 +6,9 @@
   "author": "",
   "type": "module",
   "main": "index.js",
+  "engines": { "node": ">=22.3.0" },
   "scripts": {
-    "test": "node --experimental-test-module-mocks --test",
+    "test": "node --test",
     "dev": "nodemon index.js",
     "start": "node index.js",
     "bench:tokens": "node benchmarks/scripts/generate-tokens.cjs",

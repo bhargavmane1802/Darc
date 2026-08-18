@@ -7,15 +7,14 @@ const oauth2Client = new google.auth.OAuth2(
 oauth2Client.setCredentials({
   refresh_token: process.env.REFRESH_TOKEN
 });
-export const sendVerificationEmail = async (
+
+const realGmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+export const sendVerificationEmail = (gmailClient = realGmail) => async (
     recipientEmail,
     token
 ) => {
-    const url =`${process.env.BACKEND_URL}/user/verify/${token}`;
-  const gmail = google.gmail({
-    version: "v1",
-    auth: oauth2Client
-  });
+    const url = `${process.env.BACKEND_URL}/user/verify/${token}`;
 
   const email = [
   `To: ${recipientEmail}`,
@@ -37,7 +36,7 @@ export const sendVerificationEmail = async (
     .replace(/=+$/, "");
 
   try {
-  await gmail.users.messages.send({
+  await gmailClient.users.messages.send({
     userId: "me",
     requestBody: {
       raw: encodedMessage

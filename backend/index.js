@@ -78,7 +78,7 @@ server.listen(port, () => {
     console.log(`${port}`);
 })
 app.use("/user", userRoutes);
-app.use("/auth/", validate_auth);
+app.use("/auth/", validate_auth());
 app.use("/auth/room", roomRoutes);
 app.use("/auth/journal", journalRoutes);
 app.use("/auth/message", messageRoutes);

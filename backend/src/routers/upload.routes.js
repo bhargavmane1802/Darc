@@ -5,7 +5,7 @@ import validate_auth from "../middlewares/auth.middlware.js"
 const router = express.Router();
 
 // 'image' is the name of the field in the multipart/form-data request
-router.post("/", validate_auth, upload.single("image"), (req, res) => {
+router.post("/", validate_auth(), upload.single("image"), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "No image file provided." });

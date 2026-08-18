@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 const genAI = new GoogleGenerativeAI(process.env.Llm_Api_Key);
 
 // send a journal entry  and past 5 related entries . it will return a responce form ai
-export const getAIFeedback = async (entryContent, pastEntries) => {
+export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastEntries) => {
   try {
     // 1. Map recursive context blocks (handling cases where past AI feedback is empty)
     const contextBlocks = pastEntries
@@ -31,7 +31,7 @@ export const getAIFeedback = async (entryContent, pastEntries) => {
     `;
 
     // 3. Initialize the fast model layer
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAIClient.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // 4. Initiate the live content stream transaction
     // Passing the prompt structure and the current live entry content separately
@@ -44,8 +44,8 @@ export const getAIFeedback = async (entryContent, pastEntries) => {
   }
 };
 
-export const generateRoomDigest = async (entries) => {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+export const generateRoomDigest = (genAIClient = genAI) => async (entries) => {
+  const model = genAIClient.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
   const entryText = entries.map(e => `- ${e.content}`).join("\n");
 
@@ -66,11 +66,11 @@ export const generateRoomDigest = async (entries) => {
   return result.response.text();
 };
 
-export const generateEmbeddings = async (text) => {
+export const generateEmbeddings = (GoogleGenAILib = GoogleGenAI) => async (text) => {
   try {
     // If there is no text content (e.g., an image-only entry), return an empty array
     if (!text || text.trim() === "") return [];
-    const AI = new GoogleGenAI({
+    const AI = new GoogleGenAILib({
   apiKey: process.env.Llm_Api_Key,
 });
     const response = await AI.models.embedContent({
