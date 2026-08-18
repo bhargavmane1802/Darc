@@ -34,7 +34,8 @@ export default function Auth() {
         }
       } else {
         await apiRegister(username, password, email);
-        addToast('Account created! Please check your email to verify your account.', 'success');
+        // addToast('Account created! Please check your email to verify your account.', 'success');
+        addToast('Account created successfully! Please sign in.', 'success');
         setEmail('');
         setIsLogin(true);
       }
