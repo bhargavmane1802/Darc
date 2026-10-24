@@ -47,7 +47,9 @@ export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastE
 export const generateRoomDigest = (genAIClient = genAI) => async (entries) => {
   const model = genAIClient.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-  const entryText = entries.map(e => `- ${e.content}`).join("\n");
+ const entryText = entries
+    .map(e => `- ${e.username}: ${e.content}`)
+    .join("\n");
 
   const prompt = `
     You are a technical project manager. Below is a list of journal entries 
@@ -57,8 +59,8 @@ export const generateRoomDigest = (genAIClient = genAI) => async (entries) => {
     ${entryText}
     
     TASK:
-    Create a 3-sentence "Daily Standup Summary". 
-    Focus on: What was accomplished and what are the common blockers? 
+    Create a "Daily Standup Summary" for each user seperately. 
+    Focus on: What was accomplished by every user .
     Keep it concise and professional.
   `;
 

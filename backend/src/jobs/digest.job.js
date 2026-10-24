@@ -7,6 +7,7 @@ import { generateRoomDigest as generateRoomDigestFactory } from "../services/ai.
 const _generateRoomDigest = generateRoomDigestFactory();
 import { getIO } from "../sockets/socket.js";
 import bcrypt from "bcrypt";
+import { ContextOptionsModelFromJSON } from "@pinecone-database/pinecone/dist/pinecone-generated-ts-fetch/assistant_data/index.js";
 
 // Helper to get or create the "AI Bot" identity
 let botId = null;
@@ -17,7 +18,7 @@ export const getBotId = async (
     bcryptLib = bcrypt
 ) => {
     if (botId) return botId;
-    let bot = await UserModel.findOne({ username: "AI Mentor" });
+    let bot = await UserModel.findOne({ username: "BOT" });
     if (!bot) {
         const password = "system_generated_password";
         const hashed_password = await bcryptLib.hash(password, 10);
@@ -74,6 +75,9 @@ export const processRoomDigest = async (
         console.error(`Error processing room ${roomId}:`, err);
         // We don't throw the error here so that one bad room
         // doesn't crash the entire batch.
+        // change promise.all to promise.allSetteld so now i need to throw error
+        throw err;
+
     }
 };
 
@@ -86,19 +90,61 @@ export const runDigestTick = async ({
     try {
         const mentorId = await getBotIdFn();
         const startOfYesterday = new Date();
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        startOfYesterday.setDate(startOfYesterday.getDate() );
         startOfYesterday.setHours(0, 0, 0, 0);
 
         const endOfYesterday = new Date();
-        endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+        endOfYesterday.setDate(endOfYesterday.getDate() );
         endOfYesterday.setHours(23, 59, 59, 999);
         const todayStr = startOfYesterday.toISOString().slice(0, 10);
 
         // STEP 1: Aggregation (Fetch everything in one big DB call)
         const roomGroups = await JournalModel.aggregate([
-            { $match: { createdAt: { $gte: startOfYesterday, $lte: endOfYesterday } } },
-            { $group: { _id: "$room", entries: { $push: "$content" } } }
-        ]);
+    // 1. Get only yesterday's journals
+    {
+        $match: {
+            createdAt: {
+                $gte: startOfYesterday,
+                $lt: endOfYesterday
+            }
+        }
+    },
+
+    // 2. Get the User document using Journal.author
+    {
+        $lookup: {
+            from: "users",
+            localField: "author",
+            foreignField: "_id",
+            as: "authorInfo"
+        }
+    },
+
+    // 3. Convert authorInfo array into an object
+    {
+        $unwind: "$authorInfo"
+    },
+
+    // 4. Keep journal entries in chronological order
+    {
+        $sort: {
+            createdAt: 1
+        }
+    },
+
+    // 5. Group journals by room
+    {
+        $group: {
+            _id: "$room",
+            entries: {
+                $push: {
+                    username: "$authorInfo.username",
+                    content: "$content"
+                }
+            }
+        }
+    }
+]);
 
         if (roomGroups.length === 0) {
             console.log("No journals found for today.");
@@ -107,18 +153,27 @@ export const runDigestTick = async ({
 
         // STEP 2: Create Tasks & Start Sliding Window
         const tasks = roomGroups.map((group) =>
-            limitConcurrency(() => processRoomFn(group, mentorId, todayStr))
+            limitConcurrency(() =>
+                processRoomFn(group, mentorId, todayStr)
+            )
         );
 
-        // STEP 3: Wait for all "slots" in the window to finish
-        await Promise.all(tasks);
-        console.log(`✅ All ${roomGroups.length} rooms processed.`);
+        const results = await Promise.allSettled(tasks);
+
+        const failed = results.filter(
+            result => result.status === "rejected"
+        );
+
+        console.log(
+            `Processed ${roomGroups.length} rooms. ` +
+            `Rejected tasks: ${failed.length}.`
+        );
     } catch (err) {
         console.error("Critical Digest Job Failure:", err);
     }
 };
 
-const startDigestJob = () => {
+export const startDigestJob = () => {
     // Sliding window: 3 rooms processing at any given time
     const limit = pLimit(3);
 
@@ -129,4 +184,13 @@ const startDigestJob = () => {
     }, { timezone: "Asia/Kolkata" });
 };
 
-export default startDigestJob;
+export const testStartDigestJob = () => {
+    // Sliding window: 3 rooms processing at any given time
+    const limit = pLimit(3);
+    // Runs every day at midnight IST
+    cron.schedule(" * * * * *", async () => {
+        console.log("Running Daily Digest Job...");
+        await runDigestTick({ limitConcurrency: limit });
+    }, { timezone: "Asia/Kolkata" });
+    console.log(" testStartDigestJob started");
+};

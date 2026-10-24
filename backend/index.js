@@ -9,7 +9,7 @@ import { messageRoutes } from "./src/routers/message.Router.js"
 import { roomRoutes } from "./src/routers/room.Router.js"
 import http from "http"
 import { initSocket } from "./src/sockets/socket.js"
-import startDigestJob from "./src/jobs/digest.job.js"
+import {startDigestJob ,testStartDigestJob} from "./src/jobs/digest.job.js"
 import uploadRouter from "./src/routers/upload.routes.js"
 import './src/workers/journal.worker.js'
 import cors from "cors";
@@ -84,9 +84,9 @@ app.use("/auth/journal", journalRoutes);
 app.use("/auth/message", messageRoutes);
 app.use("/auth/upload", uploadRouter);
 app.get("/test", async(req, res) => {
-    //just for testing porpose move to main after wards
-    await startDigestJob();
-    return res.send("it is working");
+    //just for testing porpose
+    testStartDigestJob();
+    return res.send("started a cron job that will work in every 1 min");
 })
 app.use((err, req, res, next) => {
   console.log(err,err.message);
