@@ -2,7 +2,7 @@
 
 A **real-time developer collaboration platform** that combines instant messaging, collaborative journaling, and AI-powered insights. DARC enables distributed teams to communicate seamlessly, document ideas in real-time, and receive intelligent feedback to accelerate team growth.
 
-**Live Demo:** [darc-nine.vercel.app](https://darc-nine.vercel.app/)
+**Live Demo:** [darc-pearl.vercel.app](https://darc-pearl.vercel.app/)
 
 ---
 
