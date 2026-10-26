@@ -1,55 +1,36 @@
 import cron from "node-cron";
-import pLimit from "p-limit";
-import redis from "../config/redis.js";
 import { user_Model } from "../model/user.model.js";
 import journal_Model from "../model/journal.model.js";
 import { generateRoomDigest as generateRoomDigestFactory } from "../services/ai.service.js";
 const _generateRoomDigest = generateRoomDigestFactory();
-import { getIO } from "../sockets/socket.js";
 import bcrypt from "bcrypt";
-import { ContextOptionsModelFromJSON } from "@pinecone-database/pinecone/dist/pinecone-generated-ts-fetch/assistant_data/index.js";
+import { date } from "../utils/digestDate.js";
+import { hasProcessedRoom, markProcessedRoom } from "../utils/redisDigestState.js";
+import { DateTime } from "luxon";
+import room_Model from "../model/room.model.js";
+import { digestQueue } from "../queue/digest.queue.js";
 
-// Helper to get or create the "AI Bot" identity
-let botId = null;
-export const _resetBotId = () => { botId = null; };
+let botId = "6a4ff1e4ecae03826a338e15";
 
-export const getBotId = async (
-    UserModel = user_Model,
-    bcryptLib = bcrypt
-) => {
-    if (botId) return botId;
-    let bot = await UserModel.findOne({ username: "BOT" });
-    if (!bot) {
-        const password = "system_generated_password";
-        const hashed_password = await bcryptLib.hash(password, 10);
-        bot = await UserModel.create({
-            username: "AI Mentor",
-            password: hashed_password,
-            status: "bot"
-        });
-    }
-    botId = bot._id;
-    return botId;
-};
-
-// The Worker: Handles a single room's independent pipeline
 export const processRoomDigest = async (
     group,
     mentorId,
     todayStr,
     {
-        redisClient = redis,
         JournalModel = journal_Model,
         digestFn = _generateRoomDigest,
-        getSocketIO = getIO
     } = {}
 ) => {
     const roomId = group._id.toString();
     const redisKey = `digests:${todayStr}`;
     try {
+        const start=new Date();
         // 1. Redis Check (Fast Skip)
-        const alreadyDone = await redisClient.sismember(redisKey, roomId);
-        if (alreadyDone) return;
+        const alreadyDone = await hasProcessedRoom(redisKey, roomId);
+        if (alreadyDone) {
+            const time=new Date()-start;
+            console.log(time,roomId," already done");
+            return;}
 
         // 2. AI Request (The long wait)
         const digestText = await digestFn(group.entries);
@@ -63,13 +44,11 @@ export const processRoomDigest = async (
         });
         const savedJournal = await digestJournal.save();
 
-        // B. Emit to Socket
-        getSocketIO().to(roomId).emit("create_journal", savedJournal);
 
         // C. Mark as Done in Redis (Only if A & B succeeded)
-        await redisClient.sadd(redisKey, roomId);
-        await redisClient.expire(redisKey, 86400); // 24h TTL
-
+        await markProcessedRoom(redisKey, roomId); // 24h TTL
+        const time=new Date()-start;
+        console.log(time,roomId);
         console.log(`[SLIDING WINDOW] Finished Room: ${roomId}`);
     } catch (err) {
         console.error(`Error processing room ${roomId}:`, err);
@@ -82,21 +61,12 @@ export const processRoomDigest = async (
 };
 
 export const runDigestTick = async ({
-    getBotIdFn = getBotId,
     JournalModel = journal_Model,
     processRoomFn = processRoomDigest,
-    limitConcurrency = pLimit(3)
 } = {}) => {
     try {
-        const mentorId = await getBotIdFn();
-        const startOfYesterday = new Date();
-        startOfYesterday.setDate(startOfYesterday.getDate() );
-        startOfYesterday.setHours(0, 0, 0, 0);
-
-        const endOfYesterday = new Date();
-        endOfYesterday.setDate(endOfYesterday.getDate() );
-        endOfYesterday.setHours(23, 59, 59, 999);
-        const todayStr = startOfYesterday.toISOString().slice(0, 10);
+        const mentorId = botId;
+        const todayStr = date.key;
 
         // STEP 1: Aggregation (Fetch everything in one big DB call)
         const roomGroups = await JournalModel.aggregate([
@@ -104,8 +74,8 @@ export const runDigestTick = async ({
     {
         $match: {
             createdAt: {
-                $gte: startOfYesterday,
-                $lt: endOfYesterday
+                $gte: date.start,
+                $lt: date.end
             }
         }
     },
@@ -173,24 +143,63 @@ export const runDigestTick = async ({
     }
 };
 
-export const startDigestJob = () => {
-    // Sliding window: 3 rooms processing at any given time
-    const limit = pLimit(3);
+// export const startDigestJob = () => {
+//     // Sliding window: 3 rooms processing at any given time
+
+//     // Runs every day at midnight IST
+//     cron.schedule("0 0 * * *", async () => {
+//         console.log("Running Daily Digest Job...");
+//         await runDigestTick({ limitConcurrency: limit });
+//     }, { timezone: "Asia/Kolkata" });
+// };
+
+export const testStartDigestJob = async () => {
+    console.log("Running Daily Digest Job...");
+
+    // 1. Retrieve all room IDs
+    const roomIds = await room_Model.distinct("_id");
+    const size = roomIds.length;
+
+    // 2. Process rooms in batches of 10
+    for (let i = 0; i < size; i += 10) {
+        const batchRoomIds = roomIds.slice(i, i + 10);
+
+        await digestQueue.add(
+            "createDigest",
+            { rooms: batchRoomIds },
+            {
+                attempts: 3,
+                backoff: {
+                    type: "exponential",
+                    delay: 2000
+                }
+            }
+        );
+
+        console.log(
+            `Queued batch: ${i + 1}-${i + batchRoomIds.length} of ${size}`
+        );
+    }
+
+    console.log("All digest batches queued.");
+};
+
+
+//this is the newer version of the digest report generation
+// cron job
+export const startDigestJob = async() => {
 
     // Runs every day at midnight IST
     cron.schedule("0 0 * * *", async () => {
         console.log("Running Daily Digest Job...");
-        await runDigestTick({ limitConcurrency: limit });
+        //a->retrive all the room ids and batch them .
+        const roomIds = await room_Model.find({}).distinct("_id");
+        const size=roomIds.length;
+        for(let i=0;i<size;i+=10){
+            let end=Math.min(size-1,i+9);
+            let batchRoomIds=roomIds.slice(i,end);
+            digestQueue.add('createDigest',{})
+            await queue.add('createDigest',{rooms:batchRoomIds},{attempts: 3,backoff: { type: 'exponential', delay: 2000}});
+        }
     }, { timezone: "Asia/Kolkata" });
-};
-
-export const testStartDigestJob = () => {
-    // Sliding window: 3 rooms processing at any given time
-    const limit = pLimit(3);
-    // Runs every day at midnight IST
-    cron.schedule(" * * * * *", async () => {
-        console.log("Running Daily Digest Job...");
-        await runDigestTick({ limitConcurrency: limit });
-    }, { timezone: "Asia/Kolkata" });
-    console.log(" testStartDigestJob started");
 };

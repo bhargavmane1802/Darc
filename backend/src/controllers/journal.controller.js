@@ -8,6 +8,7 @@ import message_Model from "../model/message.model.js";
 import redis from "../config/redis.js";
 import { pineconeIndex } from "../config/pinecone.js";
 import { journalQueue } from "../queue/journal.queue.js";
+import { digest_Model } from "../model/digest.model.js";
 const createEntries = (JournalModel = journal_Model,queue = journalQueue,getSocketIO = getIO)=>{
     return async (req, res, next) => {
     try {
@@ -44,7 +45,15 @@ const displayEntries = (JournalModel = journal_Model) =>
         .select("_id author room content imageUrl reaction createdAt updatedAt aiResponse")
         .populate("author","username")
         .lean();
-        return res.send(journal);
+        const report=await digest_Model.find({ room: roomId })
+        .select("_id author room content createdAt")
+        .populate("author","username")
+        .lean();
+        const merged = [...journal, ...report].sort(
+            (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+        );
+
+        return res.send(merged);
     }
     catch (err) {
         console.log("Failed to display journal entry");
@@ -147,7 +156,7 @@ const aiResponses= (JournalModel = journal_Model, redisClient = redis, pcIndex =
         const currentVector =entry.embedding;
         const pineconeRes = await pcIndex.query({
             vector: currentVector,
-            topK: 3,
+            topK: 5,
             includeMetadata: true,
             filter: {
                 roomId: { $eq: roomId.toString() },

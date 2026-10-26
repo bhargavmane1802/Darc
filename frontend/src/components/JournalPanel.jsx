@@ -150,14 +150,46 @@ export default function JournalPanel({ roomId, user }) {
     }
   };
 
-  const formatDate = (ts) => {
-    const d = new Date(ts);
+  const getEntryDate = (entry, ts) => {
+    if (ts) {
+      const d = new Date(ts);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (entry) {
+      const candidates = [entry.createdAt, entry.created, entry.date, entry.dateKey];
+      for (const cand of candidates) {
+        if (cand) {
+          const d = new Date(cand);
+          if (!isNaN(d.getTime())) return d;
+        }
+      }
+      const idStr = entry._id ? String(entry._id) : '';
+      if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
+        const timestamp = parseInt(idStr.substring(0, 8), 16) * 1000;
+        if (!isNaN(timestamp) && timestamp > 0) {
+          const d = new Date(timestamp);
+          if (!isNaN(d.getTime())) return d;
+        }
+      }
+    }
+    return null;
+  };
+
+  const formatDate = (dateOrEntry, fallbackEntry) => {
+    let entry = fallbackEntry;
+    let ts = dateOrEntry;
+    if (dateOrEntry && typeof dateOrEntry === 'object' && !(dateOrEntry instanceof Date)) {
+      entry = dateOrEntry;
+      ts = dateOrEntry.createdAt;
+    }
+    const d = getEntryDate(entry, ts);
+    if (!d || isNaN(d.getTime())) return '';
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   // Detect bot/digest entries
   const isBotEntry = (entry) => {
-    return entry.author?.username === 'AI Mentor' || entry.content?.startsWith('🤖');
+    return entry.author?.username === 'AI Mentor' || entry.content?.startsWith('🤖') || !entry.updatedAt;
   };
 
   // Render markdown bold (**text**) as <strong>
@@ -229,106 +261,115 @@ export default function JournalPanel({ roomId, user }) {
             <p>No journal entries yet. Start documenting!</p>
           </div>
         ) : (
-          [...entries].reverse().map((entry) => {
-            const isOwn = entry.author?.username === user?.username;
-            const isBot = isBotEntry(entry);
-            return (
-              <div key={entry._id} className={`journal-entry glass ${isBot ? 'journal-entry--bot' : ''}`}>
-                <div className="journal-entry__header">
-                  <div className="journal-entry__author">
-                    <span className="journal-entry__avatar">
-                      {isBot ? '🤖' : (entry.author?.username?.[0]?.toUpperCase() || '?')}
-                    </span>
-                    <span className="journal-entry__name">{entry.author?.username || 'Unknown'}</span>
-                    {isBot && <span className="journal-entry__bot-badge">BOT</span>}
-                    <span className="journal-entry__date">{formatDate(entry.createdAt)}</span>
-                  </div>
-                  {isOwn && !isBot && (
-                    <div className="journal-entry__actions">
-                      <button className="icon-btn icon-btn--sm" onClick={() => { setEditingId(entry._id); setEditText(entry.content); }} title="Edit">✎</button>
-                      <button className="icon-btn icon-btn--sm icon-btn--danger" onClick={() => handleDelete(entry._id)} title="Delete">🗑</button>
+          [...entries]
+            .sort((a, b) => {
+              const timeA = getEntryDate(a)?.getTime() || 0;
+              const timeB = getEntryDate(b)?.getTime() || 0;
+              return timeB - timeA;
+            })
+            .map((entry) => {
+              const isJournal = Boolean(entry.updatedAt);
+              const isOwn = entry.author?.username === user?.username;
+              const isBot = isBotEntry(entry);
+              return (
+                <div key={entry._id} className={`journal-entry glass ${isBot ? 'journal-entry--bot' : ''}`}>
+                  <div className="journal-entry__header">
+                    <div className="journal-entry__author">
+                      <span className="journal-entry__avatar">
+                        {isBot ? '🤖' : (entry.author?.username?.[0]?.toUpperCase() || '?')}
+                      </span>
+                      <span className="journal-entry__name">{entry.author?.username || (isBot ? 'AI Mentor' : 'Unknown')}</span>
+                      {isBot && <span className="journal-entry__bot-badge">BOT</span>}
+                      <span className="journal-entry__date">{formatDate(entry.createdAt, entry)}</span>
                     </div>
-                  )}
-                </div>
-
-                {editingId === entry._id ? (
-                  <div className="journal-entry__edit">
-                    <textarea className="journal-panel__textarea" value={editText} onChange={(e) => setEditText(e.target.value)} rows={3} autoFocus />
-                    <div className="journal-entry__edit-actions">
-                      <button className="btn btn--primary btn--sm" onClick={() => handleEditSave(entry._id)}>Save</button>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setEditingId(null)}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {entry.imageUrl && (
-                      <div className="journal-entry__image">
-                        <img src={entry.imageUrl} alt="Journal attachment" loading="lazy" />
+                    {isOwn && !isBot && isJournal && (
+                      <div className="journal-entry__actions">
+                        <button className="icon-btn icon-btn--sm" onClick={() => { setEditingId(entry._id); setEditText(entry.content); }} title="Edit">✎</button>
+                        <button className="icon-btn icon-btn--sm icon-btn--danger" onClick={() => handleDelete(entry._id)} title="Delete">🗑</button>
                       </div>
                     )}
-                    <p className="journal-entry__content">{renderContent(entry.content)}</p>
-                  </>
-                )}
+                  </div>
 
-                {/* Reactions */}
-                <div className="journal-entry__reactions">
-                  {(entry.reaction || []).map((r) => {
-                    const count = Array.isArray(r.users) ? r.users.length : 0;
-                    const isActive = Array.isArray(r.users) && user?.id && r.users.includes(user.id);
-                    if (count === 0) return null;
-                    return (
+                  {editingId === entry._id && isJournal ? (
+                    <div className="journal-entry__edit">
+                      <textarea className="journal-panel__textarea" value={editText} onChange={(e) => setEditText(e.target.value)} rows={3} autoFocus />
+                      <div className="journal-entry__edit-actions">
+                        <button className="btn btn--primary btn--sm" onClick={() => handleEditSave(entry._id)}>Save</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setEditingId(null)}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {entry.imageUrl && (
+                        <div className="journal-entry__image">
+                          <img src={entry.imageUrl} alt="Journal attachment" loading="lazy" />
+                        </div>
+                      )}
+                      <p className="journal-entry__content">{renderContent(entry.content)}</p>
+                    </>
+                  )}
+
+                  {/* Reactions */}
+                  <div className="journal-entry__reactions">
+                    {(entry.reaction || []).map((r) => {
+                      const count = Array.isArray(r.users) ? r.users.length : 0;
+                      const isActive = Array.isArray(r.users) && user?.id && r.users.includes(user.id);
+                      if (count === 0) return null;
+                      return (
+                        <button
+                          key={r.emoji}
+                          className={`reaction-pill ${isActive ? 'reaction-pill--active' : ''}`}
+                          onClick={() => handleReaction(entry._id, r.emoji)}
+                          title={`${r.emoji} ${count}`}
+                        >
+                          {r.emoji} <span className="reaction-pill__count">{count}</span>
+                        </button>
+                      );
+                    })}
+                    {QUICK_REACTIONS.filter(e => !(entry.reaction || []).some(r => r.emoji === e && r.users?.length > 0)).slice(0, 3).map((emoji) => (
                       <button
-                        key={r.emoji}
-                        className={`reaction-pill ${isActive ? 'reaction-pill--active' : ''}`}
-                        onClick={() => handleReaction(entry._id, r.emoji)}
-                        title={`${r.emoji} ${count}`}
+                        key={emoji}
+                        className="reaction-add"
+                        onClick={() => handleReaction(entry._id, emoji)}
+                        title={`React with ${emoji}`}
                       >
-                        {r.emoji} <span className="reaction-pill__count">{count}</span>
+                        {emoji}
                       </button>
-                    );
-                  })}
-                  {QUICK_REACTIONS.filter(e => !(entry.reaction || []).some(r => r.emoji === e && r.users?.length > 0)).slice(0, 3).map((emoji) => (
-                    <button
-                      key={emoji}
-                      className="reaction-add"
-                      onClick={() => handleReaction(entry._id, emoji)}
-                      title={`React with ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                {/* AI Feedback */}
-                <div className="journal-entry__footer">
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => handleAI(entry._id)}
-                    disabled={aiRemaining === 0}
-                  >
-                    🤖 Get AI Feedback
-                    {aiRemaining !== null && (
-                      <span className={`ai-remaining ${aiRemainingClass}`}>
-                        ({aiRemaining} left)
-                      </span>
-                    )}
-                  </button>
-                  {entry.aiResponse && aiStreamId !== entry._id && (
-                    <div className="journal-entry__ai">
-                      <div className="journal-entry__ai-label">🤖 AI Mentor</div>
-                      <p>{renderContent(entry.aiResponse)}</p>
-                    </div>
-                  )}
-                  {aiStreamId === entry._id && aiText && (
-                    <div className="journal-entry__ai journal-entry__ai--streaming">
-                      <div className="journal-entry__ai-label">🤖 AI Mentor <span className="streaming-dot" /></div>
-                      <p>{aiText}</p>
+                  {/* AI Feedback */}
+                  {isJournal && (
+                    <div className="journal-entry__footer">
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => handleAI(entry._id)}
+                        disabled={aiRemaining === 0}
+                      >
+                        🤖 Get AI Feedback
+                        {aiRemaining !== null && (
+                          <span className={`ai-remaining ${aiRemainingClass}`}>
+                            ({aiRemaining} left)
+                          </span>
+                        )}
+                      </button>
+                      {entry.aiResponse && aiStreamId !== entry._id && (
+                        <div className="journal-entry__ai">
+                          <div className="journal-entry__ai-label">🤖 AI Mentor</div>
+                          <p>{renderContent(entry.aiResponse)}</p>
+                        </div>
+                      )}
+                      {aiStreamId === entry._id && aiText && (
+                        <div className="journal-entry__ai journal-entry__ai--streaming">
+                          <div className="journal-entry__ai-label">🤖 AI Mentor <span className="streaming-dot" /></div>
+                          <p>{aiText}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          })
+              );
+            })
         )}
       </div>
     </div>
