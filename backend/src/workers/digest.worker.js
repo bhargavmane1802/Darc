@@ -7,13 +7,21 @@ import { generateDigest } from "../services/ai.service.js";
 import {digest_Model} from "../model/digest.model.js";
 import mongoose  from "mongoose";
 let botId = "6a4ff1e4ecae03826a338e15";
-const retrieveRoomentries=async(rooms)=>{
-     const roomIds = rooms.map(id =>
+const retrieveRoomentries=async(rooms,redisKey)=>{
+    const notProcessedRooms=await hasProcessedRoom(redisKey,rooms);
+    if (notProcessedRooms.length === 0) {
+       return {
+            roomGroups: [],
+            allSkipped: true
+        };
+    }
+
+     const roomIds = notProcessedRooms.map(id =>
         id instanceof mongoose.Types.ObjectId
             ? id
             : new mongoose.Types.ObjectId(id)
     );
-    return await journal_Model.aggregate([
+    const roomGroups=await journal_Model.aggregate([
         {
             $match: {
                 room: { $in: roomIds },
@@ -23,6 +31,7 @@ const retrieveRoomentries=async(rooms)=>{
                 }
             }
         },
+
         {
             $lookup: {
                 from: "users",
@@ -31,11 +40,21 @@ const retrieveRoomentries=async(rooms)=>{
                 as: "authorInfo"
             }
         },
-        { $unwind: "$authorInfo" },
-        { $sort: { createdAt: 1 } },
+
+        {
+            $unwind: "$authorInfo"
+        },
+
+        {
+            $sort: {
+                createdAt: 1
+            }
+        },
+
         {
             $group: {
                 _id: "$room",
+
                 entries: {
                     $push: {
                         username: "$authorInfo.username",
@@ -43,49 +62,97 @@ const retrieveRoomentries=async(rooms)=>{
                     }
                 }
             }
+        },
+
+        {
+            $lookup: {
+                from: "digests",
+                let: {
+                    roomId: "$_id"
+                },
+                pipeline: [
+                    {
+                        $match: {
+                            dateKey: date.key,
+                            $expr: {
+                                $eq: ["$room", "$$roomId"]
+                            }
+                        }
+                    },
+                    {
+                        $project: {
+                            _id: 1
+                        }
+                    }
+                ],
+                as: "existingDigest"
+            }
+        },
+
+        {
+            $set: {
+                digestExists: {
+                    $gt: [
+                        { $size: "$existingDigest" },
+                        0
+                    ]
+                }
+            }
+        },
+
+        {
+            $project: {
+                _id: 1,
+                entries: 1,
+                digestExists: 1
+            }
         }
     ]);
-}
-export const handleDigestJob = async (job) => {
+    return {
+    roomGroups: roomGroups,
+    allSkipped: false
+};
+};
+export const handleDigestJob = async (job,key) => {
     
     if (job.name !== "createDigest") {
         console.warn(`Unknown job type: "${job.name}". Skipping.`);
         return;
     }
-
+    const redisKey = `digests:${date.key}`;
     const { rooms } = job.data;
     //retrieve all the rooms entries
-    const roomGroups = await retrieveRoomentries(rooms);
+    const {roomGroups,allSkipped} = await retrieveRoomentries(rooms,redisKey);
+    if (allSkipped) {
+        return {
+            success: true,
+            processed: 0,
+            skipped: rooms.length,
+            failed: 0
+        };
+
+    }
     if (roomGroups.length === 0) {
         console.log("No journals found for today.");
         return { success: true, processed: 0, failed: 0 };
     }
     //generate all the digest for roomEntries in serialized order
-    const redisKey = `digests:${date.key}`;
     const failedTasks = [];
     const completed=[];
-    let processed = 0;
-    let skipped = 0;
+    const roomsToMarkProcessed =[];
     for (const group of roomGroups) {
         const roomId = group._id.toString();
+        if (group.digestExists){
+            roomsToMarkProcessed .push(roomId);
+            continue;
+        }
         const start = Date.now();
             try {
-                // 1. Check whether already processed
-                // const alreadyDone = await hasProcessedRoom(redisKey, roomId);
 
-                // if (alreadyDone) {
-                //     skipped++;
-                //     console.log(`${roomId} already done. Skipping.`);
-                //     continue;
-                // }
-
-                // 2. Generate digest and wait until it finishes and save it in completed
-                const digest = await generateDigest(group.entries);
+                // 1. Generate digest and wait until it finishes and save it in completed
+                const digest = await generateDigest(group.entries,key);
                 completed.push({roomId,digest});
-                // 3. Mark processed only after successful generation
-                await markProcessedRoom(redisKey, roomId);
-                processed++;
-
+                roomsToMarkProcessed .push(roomId);
                 console.log(
                     `Finished room: ${roomId} in ${Date.now() - start}ms`
                 );
@@ -117,55 +184,72 @@ export const handleDigestJob = async (job) => {
             }))
         );
     }
-
+    await markProcessedRoom(redisKey,roomsToMarkProcessed);
         console.log({
-            processed,
-            skipped,
+            processed:completed.length,
+            skipped:roomsToMarkProcessed.length-completed.length,
             failed: failedTasks.length,
         });
 
         // Let BullMQ retry the job if any room failed
-        if (failedTasks.length > 0) {
-            // failed cases handling is yet to decide
+       if (failedTasks.length > 0) {
+            throw new Error(
+                `Failed to generate digests for ${failedTasks.length} room(s)`
+            );
         }
 
         return {
             success: true,
-            processed,
-            skipped,
+            processed:completed.length,
+            skipped:roomsToMarkProcessed.length-completed.length,
             failed: failedTasks.length
         };
     };
 
-const isTestEnvironment = process.env.NODE_ENV === 'test' || process.argv.some(arg => arg.includes('--test'));
+const isTestEnvironment =
+    process.env.NODE_ENV === "test" ||
+    process.argv.some(arg => arg.includes("--test"));
 
-const digestWorker = isTestEnvironment
-  ? { on: () => {} }
-  : new Worker(
-      'digestQueue',
-      (job) => handleDigestJob(job),
-      {
-          connection: bullConnection,
-          concurrency: 3,
-      }
-  );
-
-// Log failed jobs with full error details and attempt count
-digestWorker.on('failed', (job, err) => {
-    console.error(
-        `❌ Job "${job?.name}" (id: ${job?.id}) failed after ${job?.attemptsMade} attempt(s):`,
-        err.message
+const createDigestWorker = (workerNumber,key) => {
+    const worker = new Worker(
+        "digestQueue",
+        (job,key) => handleDigestJob(job,key),
+        {
+            connection: bullConnection,
+            concurrency: 3,
+        }
     );
-});
 
-// Log successful completions
-digestWorker.on('completed', (job, result) => {
-    console.log(`✅ Job "${job.name}" (id: ${job.id}) completed:`, result);
-});
+    worker.on("failed", (job, err) => {
+        console.error(
+            `❌ Worker ${workerNumber}: Job ${job?.id} failed after ${job?.attemptsMade} attempt(s)`
+        );
+        console.error(err.stack || err);
+    });
 
-// Catch unexpected worker-level errors (connection drops, etc.)
-digestWorker.on('error', (err) => {
-    console.error('❌ Journal Worker encountered an error:', err);
-});
+    worker.on("completed", (job, result) => {
+        console.log(
+            `✅ Worker ${workerNumber}: Job ${job.id} completed`,
+            result
+        );
+    });
 
-export default digestWorker;
+    worker.on("error", (err) => {
+        console.error(`❌ Worker ${workerNumber} error:`, err);
+    });
+
+    return worker;
+};
+const llmApiKeys = [
+    process.env.LLM_API_KEY1,
+    process.env.LLM_API_KEY2
+    // process.env.LLM_API_KEY3,
+];
+
+const digestWorkers = isTestEnvironment
+    ? []
+    : llmApiKeys.map((apiKey, index) =>
+          createDigestWorker(index + 1, apiKey)
+      );
+export default digestWorkers;
+
