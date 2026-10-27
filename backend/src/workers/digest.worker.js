@@ -113,8 +113,8 @@ const retrieveRoomentries=async(rooms,redisKey)=>{
     allSkipped: false
 };
 };
-export const handleDigestJob = async (job,key) => {
-    
+export const handleDigestJob = async (job,apikey) => {
+    console.log("this is the llm key ",apikey);
     if (job.name !== "createDigest") {
         console.warn(`Unknown job type: "${job.name}". Skipping.`);
         return;
@@ -150,7 +150,7 @@ export const handleDigestJob = async (job,key) => {
             try {
 
                 // 1. Generate digest and wait until it finishes and save it in completed
-                const digest = await generateDigest(group.entries,key);
+                const digest = await generateDigest(group.entries,apikey);
                 completed.push({roomId,digest});
                 roomsToMarkProcessed .push(roomId);
                 console.log(
@@ -210,10 +210,10 @@ const isTestEnvironment =
     process.env.NODE_ENV === "test" ||
     process.argv.some(arg => arg.includes("--test"));
 
-const createDigestWorker = (workerNumber,key) => {
+const createDigestWorker = (workerNumber,apikey) => {
     const worker = new Worker(
         "digestQueue",
-        (job,key) => handleDigestJob(job,key),
+        (job) => handleDigestJob(job,apikey),
         {
             connection: bullConnection,
             concurrency: 3,
@@ -241,11 +241,9 @@ const createDigestWorker = (workerNumber,key) => {
     return worker;
 };
 const llmApiKeys = [
-    process.env.LLM_API_KEY1,
-    process.env.LLM_API_KEY2
-    // process.env.LLM_API_KEY3,
+    process.env.Llm_Api_Key1,
+    process.env.Llm_Api_Key2
 ];
-
 const digestWorkers = isTestEnvironment
     ? []
     : llmApiKeys.map((apiKey, index) =>
