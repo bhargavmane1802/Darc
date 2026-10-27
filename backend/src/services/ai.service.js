@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleGenAI } from "@google/genai";
 
-const genAI = new GoogleGenerativeAI(process.env.Llm_Api_Key);
+const genAI = new GoogleGenerativeAI(process.env.Llm_Api_Key1);
 
 // send a journal entry  and past 5 related entries . it will return a responce form ai
 export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastEntries) => {
@@ -28,6 +28,8 @@ export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastE
       2. If the user is wrestling with a bug, deliver high-level architectural suggestions or debugging mental models.
       3. Keep the tone professional, empowering, and grounded—acting as an expert senior developer peer.
       4. Crucial: Keep your complete response highly concise and strictly under 200 words.
+      5. return rating varing from 1 to 10 signifying how relevant or important were the past enteries as a context .
+      6. add a 6 to 7 line paragraph what insight or relevance can be fond from the past entries history  
     `;
 
     // 3. Initialize the fast model layer
@@ -44,8 +46,9 @@ export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastE
   }
 };
 
-export const generateRoomDigest = (genAIClient = genAI) => async (entries) => {
-  const model = genAIClient.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+export const generateRoomDigest = () => async (entries,key) => {
+  const genAIClient = new GoogleGenerativeAI(key);
+  const model = genAIClient.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
 
  const entryText = entries
     .map(e => `- ${e.username}: ${e.content}`)
@@ -67,6 +70,7 @@ export const generateRoomDigest = (genAIClient = genAI) => async (entries) => {
   const result = await model.generateContent(prompt);
   return result.response.text();
 };
+export const generateDigest = generateRoomDigest();
 
 export const generateEmbeddings = (GoogleGenAILib = GoogleGenAI) => async (text) => {
   try {
