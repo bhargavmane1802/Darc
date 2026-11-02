@@ -24,6 +24,10 @@ const User_Schema=new mongoose.Schema({
         type:String,
         default: null
     },
+    imageUrl:{
+        type:String,
+        default: null
+    },
     status:{
         type:String,
         default:null,

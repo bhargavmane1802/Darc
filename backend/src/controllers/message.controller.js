@@ -2,31 +2,48 @@ import message_Model from "../model/message.model.js";
 import {getIO} from "../sockets/socket.js"
 
 const messageCreate = (MessageModel = message_Model, getSocketIO = getIO) =>
-    async (req, res, next) => {
+  async (req, res, next) => {
     try {
-        const { id } = req.user;
-        const { roomId } = req.params;
-        let { content, type } = req.body;
-        if (!content) return res.status(404).json({ message: "insufficient content" });
-        if (!type) type = "NA"
-        const message = new MessageModel({
-            sender: id,
-            room: roomId,
-            content: content,
-            type: type
-        });
-        await message.save();
-        await message.populate("sender","username");
-        const io = getSocketIO();
-        io.to(roomId).emit("message_new", message);
-        return res.status(200).json({ message: "message created" });
+      const { id } = req.user;
+      const { roomId } = req.params;
+      const { content } = req.body;
+
+      // Safe access: extract Cloudinary URL or fallback to null
+      const imageUrl = req.file ? req.file.path : null;
+      const textContent = content?.trim() || "";
+
+      // Ensure at least one piece of data exists
+      if (!textContent && !imageUrl) {
+        return res.status(400).json({ message: "Content or image is required" });
+      }
+
+      // Determine message type
+      const type = imageUrl ? (textContent ? "mixed" : "image") : "text";
+
+      const message = new MessageModel({
+        sender: id,
+        room: roomId,
+        content: textContent,
+        imageUrl: imageUrl,
+        type: type,
+      });
+
+      await message.save();
+      await message.populate("sender", "username");
+
+      const io = getSocketIO();
+      io.to(roomId).emit("message_new", message);
+
+      return res.status(201).json({ 
+        message: "Message created successfully", 
+        data: message 
+      });
+    } catch (err) {
+      console.error("failed to create new message:", err);
+      err.message = "failed messageCreate";
+      next(err);
     }
-    catch (err) {
-        console.log("failed to create new message");
-        err.message="failed messageCreate"
-        next(err);
-    }
-}
+  };
 
 const messageUpdate = (MessageModel = message_Model, getSocketIO = getIO) =>
     async (req, res, next) => {
