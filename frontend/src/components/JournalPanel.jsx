@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { apiGetJournals, apiCreateJournal, apiUpdateJournal, apiDeleteJournal, streamAIFeedback, apiToggleReaction, apiUploadImage } from '../services/api.js';
 import { getSocket } from '../services/socket.js';
 import { useToast } from '../context/ToastContext.jsx';
+import Avatar from './Avatar.jsx';
 
 const QUICK_REACTIONS = ['👍', '🔥', '🎉', '💡', '❤️'];
 
@@ -269,15 +270,25 @@ export default function JournalPanel({ roomId, user }) {
             })
             .map((entry) => {
               const isJournal = Boolean(entry.updatedAt);
-              const isOwn = entry.author?.username === user?.username;
+              const isOwn = entry.author?.username === user?.username || entry.author?._id === user?.id;
               const isBot = isBotEntry(entry);
+
+              const authorAvatar = isBot ? null : (entry.author?.imageUrl || entry.author?.avatar || (isOwn ? (user?.imageUrl || user?.avatar) : null));
+              const authorName = entry.author?.username || (isOwn ? user?.username : null);
+              const authorFallback = isBot ? '🤖' : (authorName?.[0]?.toUpperCase() || '?');
+
               return (
                 <div key={entry._id} className={`journal-entry glass ${isBot ? 'journal-entry--bot' : ''}`}>
                   <div className="journal-entry__header">
                     <div className="journal-entry__author">
-                      <span className="journal-entry__avatar">
-                        {isBot ? '🤖' : (entry.author?.username?.[0]?.toUpperCase() || '?')}
-                      </span>
+                      <Avatar
+                        as="span"
+                        src={authorAvatar}
+                        alt={authorName || (isBot ? 'AI Mentor' : 'Avatar')}
+                        fallback={authorFallback}
+                        className="journal-entry__avatar"
+                        imgClassName="journal-entry__avatar-img"
+                      />
                       <span className="journal-entry__name">{entry.author?.username || (isBot ? 'AI Mentor' : 'Unknown')}</span>
                       {isBot && <span className="journal-entry__bot-badge">BOT</span>}
                       <span className="journal-entry__date">{formatDate(entry.createdAt, entry)}</span>

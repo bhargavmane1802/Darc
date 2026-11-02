@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getSocket } from '../services/socket.js';
 import { apiDeleteMessage, apiUpdateMessage, apiSendMessage } from '../services/api.js';
+import Avatar from './Avatar.jsx';
 
 export default function ChatPanel({ roomId, user }) {
   const [messages, setMessages] = useState([]);
@@ -215,12 +216,18 @@ export default function ChatPanel({ roomId, user }) {
         {messages.map((msg) => {
           const isOwn = msg.sender?.username === user?.username || msg.sender?._id === user?.id;
           const readCount = isOwn ? getReadCount(msg._id) : 0;
+          const senderAvatar = msg.sender?.imageUrl || msg.sender?.avatar || null;
+          const ownAvatar = user?.imageUrl || user?.avatar || msg.sender?.imageUrl || msg.sender?.avatar || null;
           return (
             <div key={msg._id} className={`chat-bubble ${isOwn ? 'chat-bubble--own' : 'chat-bubble--other'}`}>
               {!isOwn && (
-                <div className="chat-bubble__avatar">
-                  {msg.sender?.username?.[0]?.toUpperCase() || '?'}
-                </div>
+                <Avatar
+                  src={senderAvatar}
+                  alt={msg.sender?.username || 'Avatar'}
+                  fallback={msg.sender?.username?.[0]?.toUpperCase() || '?'}
+                  className="chat-bubble__avatar"
+                  imgClassName="chat-bubble__avatar-img"
+                />
               )}
               <div className="chat-bubble__wrapper">
                 {!isOwn && (
@@ -270,9 +277,13 @@ export default function ChatPanel({ roomId, user }) {
                 </div>
               </div>
               {isOwn && (
-                <div className="chat-bubble__avatar">
-                  {user?.username?.[0]?.toUpperCase() || '?'}
-                </div>
+                <Avatar
+                  src={ownAvatar}
+                  alt={user?.username || msg.sender?.username || 'Avatar'}
+                  fallback={(user?.username || msg.sender?.username)?.[0]?.toUpperCase() || '?'}
+                  className="chat-bubble__avatar"
+                  imgClassName="chat-bubble__avatar-img"
+                />
               )}
             </div>
           );

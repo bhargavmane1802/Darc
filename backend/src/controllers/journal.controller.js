@@ -24,7 +24,7 @@ const createEntries = (JournalModel = journal_Model,queue = journalQueue,getSock
         })
         const result =await journal.save();
         if(content){await queue.add('createEmbedding',{journalId:result.id,content},{attempts: 3,backoff: { type: 'exponential', delay: 2000}});}
-        await result.populate("author", "username");
+        await result.populate("author", "username imageUrl avatar");
         const io=getSocketIO();
         io.to(roomId).emit("create_journal",result);
         return res.status(201).json("journal entry created");
@@ -43,11 +43,11 @@ const displayEntries = (JournalModel = journal_Model) =>
         const { roomId } = req.params;
         const journal = await JournalModel.find({ room: roomId })
         .select("_id author room content imageUrl reaction createdAt updatedAt aiResponse")
-        .populate("author","username")
+        .populate("author", "username imageUrl avatar")
         .lean();
         const report=await digest_Model.find({ room: roomId })
         .select("_id author room content createdAt")
-        .populate("author","username")
+        .populate("author", "username imageUrl avatar")
         .lean();
         const merged = [...journal, ...report].sort(
             (a, b) => new Date(a.createdAt) - new Date(b.createdAt)

@@ -7,12 +7,12 @@ import MemberList from '../components/MemberList.jsx';
 import RoomModal from '../components/RoomModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { apiDeleteRoom } from '../services/api.js';
+import { apiDeleteRoom, apiGetProfile } from '../services/api.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
 import '../styles/app.css';
 
 export default function AppShell() {
-  const { token, user, logout } = useAuth();
+  const { token, user, logout, updateUser } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
 
@@ -39,6 +39,22 @@ export default function AppShell() {
   }, [isDark]);
 
   const handleToggleTheme = () => setIsDark((prev) => !prev);
+
+  // Sync profile details (including avatar / imageUrl)
+  useEffect(() => {
+    if (!token) return;
+    apiGetProfile()
+      .then((data) => {
+        if (data) {
+          updateUser({
+            ...data,
+            avatar: data.imageUrl || data.avatar,
+            imageUrl: data.imageUrl || data.avatar,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [token, updateUser]);
 
   // Track active room ID in a ref so socket handlers always have latest value
   const activeRoomRef = useRef(null);

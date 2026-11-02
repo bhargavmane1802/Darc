@@ -29,7 +29,7 @@ const messageCreate = (MessageModel = message_Model, getSocketIO = getIO) =>
       });
 
       await message.save();
-      await message.populate("sender", "username");
+      await message.populate("sender", "username imageUrl avatar");
 
       const io = getSocketIO();
       io.to(roomId).emit("message_new", message);
@@ -106,7 +106,7 @@ const messageDisplay = (MessageModel = message_Model) =>
     async (req,res,next)=>{
     try{
         const {roomId}=req.params;
-        const message=await MessageModel.find({room:roomId}).populate("sender","username");
+        const message=await MessageModel.find({room:roomId}).populate("sender","username imageUrl avatar");
         return res.status(200).json({message});
     }
     catch(err){
