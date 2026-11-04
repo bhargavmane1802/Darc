@@ -2,7 +2,7 @@
 
 DARC is a collaborative workspace for software teams. Each room brings together real-time chat, a shared development journal, lightweight presence, and AI-assisted summaries and feedback.
 
-**Live app:** [darc-nine.vercel.app](https://darc-nine.vercel.app/)  
+**Live app:** [darc-pearl.vercel.app](https://darc-pearl.vercel.app/app)  
 **Repository:** [bhargavmane1802/Darc](https://github.com/bhargavmane1802/Darc)
 
 > This README describes the implementation currently in the repository. In particular, registration currently creates an account directly: the email-verification handler and email service exist, but the verification flow is not wired into the active registration path.
