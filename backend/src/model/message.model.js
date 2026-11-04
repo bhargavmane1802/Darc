@@ -10,6 +10,7 @@ const message_Schema=new mongoose.Schema({
     type: String, 
     default: null 
     },
+    publicId:{type:String,default: null },
     type:{type:String},
 },{ timestamps: true })
 message_Schema.index({

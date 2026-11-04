@@ -9,22 +9,26 @@ import redis from "../config/redis.js";
 import { pineconeIndex } from "../config/pinecone.js";
 import { journalQueue } from "../queue/journal.queue.js";
 import { digest_Model } from "../model/digest.model.js";
+import { deleteImage } from "../config/cloudinary.js";
 const createEntries = (JournalModel = journal_Model,queue = journalQueue,getSocketIO = getIO)=>{
     return async (req, res, next) => {
     try {
         const { roomId } = req.params;
         const { id } = req.user;
-        const {content, imageUrl} = req.body;
+        const {content} = req.body;
+        const imageUrl = req.file ? req.file.path : null;
+        const publicId=req.file ? req.file.filename : null;
         if (!id || (!content && !imageUrl)) return res.status(404).json({ message: "Insufficient" });
         const journal = new JournalModel({
             author: id,
             room: roomId,
             content: content,
-            imageUrl: imageUrl || null,
+            imageUrl: imageUrl,
+            publicId:publicId
         })
         const result =await journal.save();
         if(content){await queue.add('createEmbedding',{journalId:result.id,content},{attempts: 3,backoff: { type: 'exponential', delay: 2000}});}
-        await result.populate("author", "username imageUrl avatar");
+        await result.populate("author", "username imageUrl");
         const io=getSocketIO();
         io.to(roomId).emit("create_journal",result);
         return res.status(201).json("journal entry created");
@@ -43,11 +47,11 @@ const displayEntries = (JournalModel = journal_Model) =>
         const { roomId } = req.params;
         const journal = await JournalModel.find({ room: roomId })
         .select("_id author room content imageUrl reaction createdAt updatedAt aiResponse")
-        .populate("author", "username imageUrl avatar")
+        .populate("author", "username imageUrl ")
         .lean();
         const report=await digest_Model.find({ room: roomId })
         .select("_id author room content createdAt")
-        .populate("author", "username imageUrl avatar")
+        .populate("author", "username imageUrl ")
         .lean();
         const merged = [...journal, ...report].sort(
             (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
@@ -61,46 +65,71 @@ const displayEntries = (JournalModel = journal_Model) =>
         next(err);
     }
 }
-const updateEntries = (JournalModel = journal_Model, getSocketIO = getIO) =>
-  async (req, res, next) => {
-    try {
-        const { id } = req.user;
-        const { roomId, journalId } = req.params;
-        const { content} = req.body;
-        if(!content)return res.status(404).json({message:"Insufficient"});
-        const journal = await JournalModel.findOne({ _id: journalId, author: id });
-        if (!journal) return res.status(403).json({ message: "Unauthorized" });
-        if (content) journal.content = content;
-        await journal.save();
-        const io=getSocketIO();
-        io.to(roomId).emit("update_journal",{journal});
-        res.status(200).json({ message: "journal updated" });
-    }
-    catch (err) {
-        console.log("Failed to update journal entry");
-        err.message="Failed updateEntries";
-        next(err);
-    }
-}
+// const updateEntries = (JournalModel = journal_Model, getSocketIO = getIO) =>
+//   async (req, res, next) => {
+//     try {
+//         const { id } = req.user;
+//         const { roomId, journalId } = req.params;
+//         const { content} = req.body;
+//         const imageUrl = req.file ? req.file.path : null;
+//         const publicId=req.file ? req.file.filename : null;
+//         if(!content && !imageUrl)return res.status(404).json({message:"Insufficient"});
+//         const journal = await JournalModel.findOneAndUpdate(
+//             { _id: journalId, author: id },
+//             { $set: { content ,imageUrl,publicId} },
+//             { returnDocument: "before", runValidators: true }
+//             );
+
+//             if (!journal) {
+//             return res.status(403).json({ message: "Unauthorized" });
+//             }
+//         journal.content=content;
+//         journal.imageUrl=imageUrl;
+//         journal.publicId=publicId;
+//         const io=getSocketIO();
+//         io.to(roomId).emit("update_journal",{journal});
+//         res.status(200).json({ message: "journal updated" });
+//     }
+//     catch (err) {
+//         console.log("Failed to update journal entry");
+//         err.message="Failed updateEntries";
+//         next(err);
+//     }
+// }
 const deleteEntries = (JournalModel = journal_Model, pcIndex = pineconeIndex, redisClient = redis, getSocketIO = getIO) =>
   async (req, res, next) => {
     try {
         const { id } = req.user;
         const { roomId, journalId } = req.params;
-
-        // 1. Author verification & check if document exists
-        const journal = await JournalModel.findOne({ _id: journalId, author: id });
-        if (!journal) return res.status(403).json({ message: "Unauthorized or entry not found" });
-
-        // 2. LAYER 1: Permanent removal from MongoDB (Source of Truth)
-        const response = await JournalModel.deleteOne({ _id: journalId });
-
+        const response = await JournalModel.findOneAndDelete({
+                _id: journalId,
+                author: id,
+                room: roomId
+            });
+        if (!response) return res.status(403).json({ message: "Unauthorized or entry not found" });
+        if(response.publicId){ try {
+                await deleteImage(response.publicId);
+            } catch (err) {
+                console.error("Cloudinary deletion failed:", err);
+            }}
         // 3. LAYER 2: Evict semantic vectors and metadata payload from Pinecone
-        await pcIndex.deleteOne({id:journalId.toString()});
-
+        try {
+            await pcIndex.deleteOne({
+                id: journalId.toString()
+            });
+        } catch (err) {
+            console.error("Pinecone deletion failed:", err);
+        }
         // 4. LAYER 3: Evict the AI response cache key from Redis
-        const cacheKey = `ai_response:room:${roomId}:journal:${journalId}`;
-        await redisClient.del(cacheKey);
+        try {
+            const cacheKey =
+                `ai_response:room:${roomId}:journal:${journalId}`;
+
+            await redisClient.del(cacheKey);
+        } catch (err) {
+            console.error("Redis deletion failed:", err);
+        }
+
 
         // 5. Broadcast real-time deletion update to the socket channel
         const io = getSocketIO();
@@ -254,4 +283,4 @@ const manageReaction= (JournalModel = journal_Model, getSocketIO = getIO) => asy
         next(err);
     }
 }
-export { createEntries, displayEntries,updateEntries,deleteEntries,aiResponses,manageReaction};
+export { createEntries, displayEntries, deleteEntries, aiResponses, manageReaction };

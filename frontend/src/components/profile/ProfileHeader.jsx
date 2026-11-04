@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { FiArrowLeft, FiMail, FiUser, FiCheckCircle } from 'react-icons/fi';
 
 function ProfileHeaderComponent({
@@ -10,6 +10,13 @@ function ProfileHeaderComponent({
   onBack,
 }) {
   const initial = (name || username || '?')[0].toUpperCase();
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
+
+  const showImage = Boolean(avatarUrl) && !imgError;
 
   return (
     <div className="profile-header">
@@ -30,12 +37,13 @@ function ProfileHeaderComponent({
       <div className="profile-header__main">
         <div className="profile-header__avatar-wrapper">
           <div className="profile-header__avatar-ring">
-            {avatarUrl ? (
+            {showImage ? (
               <img
                 src={avatarUrl}
                 alt={name || username}
                 className="profile-header__avatar-img"
                 loading="lazy"
+                onError={() => setImgError(true)}
               />
             ) : (
               <div className="profile-header__avatar-fallback">

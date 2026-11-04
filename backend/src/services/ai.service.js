@@ -30,7 +30,7 @@ export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastE
     `;
 
     // 3. Initialize the fast model layer
-    const model = genAIClient.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAIClient.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
 
     // 4. Initiate the live content stream transaction
     // Passing the prompt structure and the current live entry content separately

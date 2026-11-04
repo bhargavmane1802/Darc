@@ -11,6 +11,7 @@ const journal_Schema=new mongoose.Schema({
         type: String, 
         default: null 
     },
+    publicId:{type:String,default: null },
     embedding: [{ 
         type: Number, 
     }],

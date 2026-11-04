@@ -53,11 +53,6 @@ socket.on("create_journal",(journal)=>{
   console.log("new journal entry");
   console.log(journal);
 })
-//update jouirnal entry
-socket.on("update_journal",({journal})=>{
-  console.log("this was updated");
-  console.log(journal);
-})
 //delete journal entry
 socket.on("delete_journal",({entry_id})=>{
   console.log("this id journal entry was deleted");

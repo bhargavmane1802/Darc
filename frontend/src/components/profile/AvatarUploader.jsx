@@ -90,7 +90,14 @@ function AvatarUploaderComponent({
     }
   }, [handleFile]);
 
+  const [imgError, setImgError] = useState(false);
   const displayImage = localPreview || currentAvatar;
+
+  useEffect(() => {
+    setImgError(false);
+  }, [displayImage]);
+
+  const showImage = Boolean(displayImage) && !imgError;
   const initial = (username || '?')[0].toUpperCase();
 
   return (
@@ -117,11 +124,12 @@ function AvatarUploaderComponent({
         }}
       >
         <div className="avatar-uploader__preview-container">
-          {displayImage ? (
+          {showImage ? (
             <img
               src={displayImage}
               alt="Avatar preview"
               className="avatar-uploader__image"
+              onError={() => setImgError(true)}
             />
           ) : (
             <div className="avatar-uploader__placeholder">

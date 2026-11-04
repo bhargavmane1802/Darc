@@ -98,14 +98,36 @@ export const apiUpdateMessage = (roomId, messageId, content) =>
 export const apiDeleteMessage = (roomId, messageId) =>
   request(`/auth/message/${roomId}/delete/${messageId}`, { method: 'DELETE' });
 
-// Journal — paths match backend: /:roomId/create, /:roomId/display, /:roomId/update/:journalId, /:roomId/delete/:journalId
+// Journal — paths match backend: /:roomId/create, /:roomId/display, /:roomId/delete/:journalId
 export const apiGetJournals = (roomId) => request(`/auth/journal/${roomId}/display`);
 
-export const apiCreateJournal = (roomId, content, imageUrl) =>
-  request(`/auth/journal/${roomId}/create`, { method: 'POST', body: JSON.stringify({ content, imageUrl }) });
+export const apiCreateJournal = (roomId, contentOrData, maybeImage) => {
+  if (contentOrData instanceof FormData) {
+    return request(`/auth/journal/${roomId}/create`, { method: 'POST', body: contentOrData });
+  }
 
-export const apiUpdateJournal = (roomId, journalId, content) =>
-  request(`/auth/journal/${roomId}/update/${journalId}`, { method: 'PUT', body: JSON.stringify({ content }) });
+  let content = contentOrData;
+  let imageFile = maybeImage;
+
+  if (contentOrData && typeof contentOrData === 'object' && !(contentOrData instanceof File)) {
+    content = contentOrData.content;
+    imageFile = contentOrData.image || contentOrData.file || maybeImage;
+  }
+
+  if (imageFile) {
+    const formData = new FormData();
+    if (content && typeof content === 'string' && content.trim()) {
+      formData.append('content', content.trim());
+    }
+    formData.append('image', imageFile);
+    return request(`/auth/journal/${roomId}/create`, { method: 'POST', body: formData });
+  }
+
+  return request(`/auth/journal/${roomId}/create`, {
+    method: 'POST',
+    body: JSON.stringify({ content: (typeof content === 'string' ? content.trim() : content) || '' }),
+  });
+};
 
 export const apiDeleteJournal = (roomId, journalId) =>
   request(`/auth/journal/${roomId}/delete/${journalId}`, { method: 'DELETE' });

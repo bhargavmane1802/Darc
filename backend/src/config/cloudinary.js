@@ -28,5 +28,19 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
+export const deleteImage = async (publicId) => {
+  try {
+    const result = await cloudinary.uploader.destroy(publicId);
 
+    if (result.result !== "ok") {
+      throw new Error(`Image deletion failed: ${result.result}`);
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error("Cloudinary deletion error:", error);
+    throw error;
+  }
+};
 export default upload;

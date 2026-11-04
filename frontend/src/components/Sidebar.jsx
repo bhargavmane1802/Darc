@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGetMyRooms } from '../services/api.js';
+import Avatar from './Avatar.jsx';
 
 export default function Sidebar({
   user,
@@ -144,23 +145,14 @@ export default function Sidebar({
             }
           }}
         >
-          <span className="sidebar__avatar">
-            {avatarSrc ? (
-              <img
-                src={avatarSrc}
-                alt={user?.username || 'Avatar'}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  display: 'block',
-                }}
-              />
-            ) : (
-              user?.username?.[0]?.toUpperCase() || '?'
-            )}
-          </span>
+          <Avatar
+            as="span"
+            src={avatarSrc}
+            alt={user?.username || 'Avatar'}
+            fallback={user?.username?.[0]?.toUpperCase() || '?'}
+            className="sidebar__avatar"
+            imgClassName="sidebar__avatar-img"
+          />
           {!collapsed && (
             <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
               <span className="sidebar__username">{user?.name || user?.username}</span>
