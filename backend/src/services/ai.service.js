@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GoogleGenAI } from "@google/genai";
 
-const genAI = new GoogleGenerativeAI(process.env.Llm_Api_Key1);
+const genAI = new GoogleGenerativeAI(process.env.Llm_Api_Key2);
 
 // send a journal entry  and past 5 related entries . it will return a responce form ai
 export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastEntries) => {
@@ -31,7 +30,7 @@ export const getAIFeedback = (genAIClient = genAI) => async (entryContent, pastE
     `;
 
     // 3. Initialize the fast model layer
-    const model = genAIClient.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAIClient.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
 
     // 4. Initiate the live content stream transaction
     // Passing the prompt structure and the current live entry content separately
@@ -70,21 +69,18 @@ export const generateRoomDigest = () => async (entries,key) => {
 };
 export const generateDigest=generateRoomDigest();
 
-export const generateEmbeddings = (GoogleGenAILib = GoogleGenAI) => async (text) => {
+export const generateEmbeddings = (AI = genAI) => async (text) => {
   try {
     // If there is no text content (e.g., an image-only entry), return an empty array
     if (!text || text.trim() === "") return [];
-    const AI = new GoogleGenAILib({
-  apiKey: process.env.Llm_Api_Key1,
-});
-    const response = await AI.models.embedContent({
-      model: "gemini-embedding-001",
-      contents: text,
-      config: {
-        outputDimensionality: 768,
+    const model = AI.getGenerativeModel({ model: "gemini-embedding-001" });
+    const response = await model.embedContent({
+      content: {
+        parts: [{ text }],
       },
+      outputDimensionality: 768,
     });
-    return response.embeddings[0].values;
+    return response.embedding.values;
   } catch (error) {
     console.error("❌ Gemini Embedding Generation Failed:", error);
     throw new Error("Failed to process text semantic layer.");

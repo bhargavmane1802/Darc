@@ -20,10 +20,15 @@ const User_Schema=new mongoose.Schema({
     about:{
         type:String,
     },
+    imageUrl:{
+        type:String,
+        default: null
+    },
     avatar:{
         type:String,
         default: null
     },
+    publicId:{type:String,default: null },
     status:{
         type:String,
         default:null,

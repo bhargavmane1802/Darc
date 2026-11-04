@@ -55,7 +55,7 @@ export const handleJoinRoom = ({ MessageModel = message_Model, redisClient = red
             const history = await MessageModel.find({ room: room_id })
                 .sort({ createdAt: -1 })
                 .limit(30)
-                .populate("sender", "username")
+                .populate("sender", "username imageUrl avatar")
                 .lean(); // as it is read only
 
             socket.emit("message_display", history.reverse());
@@ -128,7 +128,7 @@ export const handleMessageSend = ({ MessageModel = message_Model } = {}) =>
             });
 
             await newMessage.save();
-            await newMessage.populate("sender", "username");
+            await newMessage.populate("sender", "username imageUrl avatar");
 
             // 3. Broadcast to EVERYONE in the room
             io.to(room_id).emit("message_new", newMessage);

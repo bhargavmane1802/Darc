@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getSocket } from '../services/socket.js';
-import { apiDeleteMessage, apiUpdateMessage, apiUploadImage } from '../services/api.js';
+import { apiDeleteMessage, apiUpdateMessage, apiSendMessage } from '../services/api.js';
+import Avatar from './Avatar.jsx';
 
 export default function ChatPanel({ roomId, user }) {
   const [messages, setMessages] = useState([]);
@@ -34,7 +35,10 @@ export default function ChatPanel({ roomId, user }) {
       }, 100);
     };
     const onNew = (msg) => {
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
+      });
       setTimeout(() => {
         scrollToBottom();
         emitRead(msg._id);
@@ -90,39 +94,71 @@ export default function ChatPanel({ roomId, user }) {
   };
 
   const handleSend = async () => {
+    if ((!input.trim() && !imagePreview) || uploading) return;
+
     const socket = getSocket();
-    if (!socket || (!input.trim() && !imagePreview)) return;
+    const text = input.trim();
+    const file = imagePreview?.file;
 
-    let imageUrl = null;
-
-    // Upload image if attached
-    if (imagePreview) {
+    // Send in ONE server request when uploading image
+    if (file) {
       setUploading(true);
       try {
-        const data = await apiUploadImage(imagePreview.file);
-        imageUrl = data.imageUrl;
+        const res = await apiSendMessage(roomId, text, file);
+        setInput('');
+        cancelImagePreview();
+        // If socket is disconnected, append message directly from response
+        if (res?.data && (!socket || !socket.connected)) {
+          setMessages((prev) => {
+            if (prev.some((m) => m._id === res.data._id)) return prev;
+            return [...prev, res.data];
+          });
+          setTimeout(scrollToBottom, 100);
+        }
       } catch (err) {
-        console.error('Image upload failed:', err);
+        console.error('Failed to send image message:', err);
+        alert(err.message || 'Failed to send image message');
+      } finally {
         setUploading(false);
-        return;
       }
-      setUploading(false);
+    } else {
+      if (socket && socket.connected) {
+        socket.emit('message_send', {
+          room_id: roomId,
+          content: text,
+        });
+      } else {
+        setUploading(true);
+        try {
+          const res = await apiSendMessage(roomId, text);
+          if (res?.data) {
+            setMessages((prev) => {
+              if (prev.some((m) => m._id === res.data._id)) return prev;
+              return [...prev, res.data];
+            });
+            setTimeout(scrollToBottom, 100);
+          }
+        } catch (err) {
+          console.error('Failed to send message:', err);
+          alert(err.message || 'Failed to send message');
+        } finally {
+          setUploading(false);
+        }
+      }
+      setInput('');
     }
 
-    socket.emit('message_send', {
-      room_id: roomId,
-      content: input.trim() || (imageUrl ? '📷 Image' : ''),
-      imageUrl,
-    });
-    setInput('');
-    setImagePreview(null);
-    socket.emit('typing_end', { room_id: roomId });
+    if (socket) {
+      socket.emit('typing_end', { room_id: roomId });
+    }
   };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (!uploading) {
+        handleSend();
+      }
     }
   };
 
@@ -180,12 +216,18 @@ export default function ChatPanel({ roomId, user }) {
         {messages.map((msg) => {
           const isOwn = msg.sender?.username === user?.username || msg.sender?._id === user?.id;
           const readCount = isOwn ? getReadCount(msg._id) : 0;
+          const senderAvatar = msg.sender?.imageUrl || msg.sender?.avatar || null;
+          const ownAvatar = user?.imageUrl || user?.avatar || msg.sender?.imageUrl || msg.sender?.avatar || null;
           return (
             <div key={msg._id} className={`chat-bubble ${isOwn ? 'chat-bubble--own' : 'chat-bubble--other'}`}>
               {!isOwn && (
-                <div className="chat-bubble__avatar">
-                  {msg.sender?.username?.[0]?.toUpperCase() || '?'}
-                </div>
+                <Avatar
+                  src={senderAvatar}
+                  alt={msg.sender?.username || 'Avatar'}
+                  fallback={msg.sender?.username?.[0]?.toUpperCase() || '?'}
+                  className="chat-bubble__avatar"
+                  imgClassName="chat-bubble__avatar-img"
+                />
               )}
               <div className="chat-bubble__wrapper">
                 {!isOwn && (
@@ -208,10 +250,15 @@ export default function ChatPanel({ roomId, user }) {
                     <>
                       {msg.imageUrl && (
                         <div className="chat-bubble__image">
-                          <img src={msg.imageUrl} alt="Shared image" loading="lazy" />
+                          <img
+                            src={msg.imageUrl}
+                            alt="Shared image"
+                            loading="lazy"
+                            onClick={() => window.open(msg.imageUrl, '_blank')}
+                          />
                         </div>
                       )}
-                      <p className="chat-bubble__text">{msg.content}</p>
+                      {msg.content && <p className="chat-bubble__text">{msg.content}</p>}
                     </>
                   )}
                   <div className="chat-bubble__footer">
@@ -223,16 +270,20 @@ export default function ChatPanel({ roomId, user }) {
                   {/* Floating actions on hover */}
                   {isOwn && editingId !== msg._id && (
                     <div className="chat-bubble__actions">
-                      <button className="icon-btn icon-btn--sm" onClick={() => { setEditingId(msg._id); setEditText(msg.content); }} title="Edit">✎</button>
+                      <button className="icon-btn icon-btn--sm" onClick={() => { setEditingId(msg._id); setEditText(msg.content || ''); }} title="Edit">✎</button>
                       <button className="icon-btn icon-btn--sm icon-btn--danger" onClick={() => handleDelete(msg._id)} title="Delete">🗑</button>
                     </div>
                   )}
                 </div>
               </div>
               {isOwn && (
-                <div className="chat-bubble__avatar">
-                  {user?.username?.[0]?.toUpperCase() || '?'}
-                </div>
+                <Avatar
+                  src={ownAvatar}
+                  alt={user?.username || msg.sender?.username || 'Avatar'}
+                  fallback={(user?.username || msg.sender?.username)?.[0]?.toUpperCase() || '?'}
+                  className="chat-bubble__avatar"
+                  imgClassName="chat-bubble__avatar-img"
+                />
               )}
             </div>
           );
@@ -250,7 +301,13 @@ export default function ChatPanel({ roomId, user }) {
       {imagePreview && (
         <div className="chat-panel__image-preview">
           <img src={imagePreview.url} alt="Preview" />
-          <button className="chat-panel__image-preview-cancel" onClick={cancelImagePreview}>✕</button>
+          <button
+            className="chat-panel__image-preview-cancel"
+            onClick={cancelImagePreview}
+            disabled={uploading}
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -276,6 +333,7 @@ export default function ChatPanel({ roomId, user }) {
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          disabled={uploading}
         />
         <button
           className="btn btn--primary btn--send"

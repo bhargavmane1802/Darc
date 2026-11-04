@@ -1,30 +1,52 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiGetMyRooms } from '../services/api.js';
+import Avatar from './Avatar.jsx';
 
 export default function Sidebar({
-  user, rooms, setRooms, activeRoom, onSelectRoom, onLogout, onCreateRoom, onJoinRoom, onDeleteRoom, onLeaveRoom, isDark, onToggleTheme,
+  user,
+  rooms,
+  setRooms,
+  activeRoom,
+  onSelectRoom,
+  onLogout,
+  onCreateRoom,
+  onJoinRoom,
+  onDeleteRoom,
+  onLeaveRoom,
+  isDark,
+  onToggleTheme,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   // Fetch user's rooms on mount
   useEffect(() => {
     apiGetMyRooms()
       .then((data) => {
         if (Array.isArray(data)) {
-          setRooms(data.map((r) => ({
-            _id: r._id,
-            name: r.name,
-            description: r.description || '',
-            inviteCode: r.inviteCode,
-            owner: r.owner,
-            isPrivate: r.isPrivate,
-          })));
+          setRooms(
+            data.map((r) => ({
+              _id: r._id,
+              name: r.name,
+              description: r.description || '',
+              inviteCode: r.inviteCode,
+              owner: r.owner,
+              isPrivate: r.isPrivate,
+            }))
+          );
         }
       })
       .catch((err) => console.error('Failed to load rooms:', err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [setRooms]);
+
+  const handleGoProfile = useCallback(() => {
+    navigate('/profile');
+  }, [navigate]);
+
+  const avatarSrc = user?.imageUrl || user?.avatar;
 
   return (
     <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
@@ -33,7 +55,11 @@ export default function Sidebar({
           <span className="sidebar__logo">◈</span>
           {!collapsed && <span className="sidebar__brand-name">DARC</span>}
         </div>
-        <button className="icon-btn" onClick={() => setCollapsed(!collapsed)} title="Toggle sidebar">
+        <button
+          className="icon-btn"
+          onClick={() => setCollapsed(!collapsed)}
+          title="Toggle sidebar"
+        >
           {collapsed ? '▸' : '◂'}
         </button>
       </div>
@@ -105,13 +131,56 @@ export default function Sidebar({
       </div>
 
       <div className="sidebar__footer">
-        <div className="sidebar__user" title={user?.username}>
-          <span className="sidebar__avatar">
-            {user?.username?.[0]?.toUpperCase() || '?'}
-          </span>
-          {!collapsed && <span className="sidebar__username">{user?.username}</span>}
+        <div
+          className="sidebar__user"
+          title={`${user?.name ? `${user.name} (@${user?.username})` : user?.username} — Click to view profile`}
+          onClick={handleGoProfile}
+          style={{ cursor: 'pointer' }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleGoProfile();
+            }
+          }}
+        >
+          <Avatar
+            as="span"
+            src={avatarSrc}
+            alt={user?.username || 'Avatar'}
+            fallback={user?.username?.[0]?.toUpperCase() || '?'}
+            className="sidebar__avatar"
+            imgClassName="sidebar__avatar-img"
+          />
+          {!collapsed && (
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+              <span className="sidebar__username">{user?.name || user?.username}</span>
+              {user?.status && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--text-muted)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {user.status}
+                </span>
+              )}
+            </div>
+          )}
         </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            className="icon-btn"
+            onClick={handleGoProfile}
+            title="Profile & Settings"
+          >
+            👤
+          </button>
           <button
             className="theme-toggle"
             onClick={onToggleTheme}
@@ -127,4 +196,3 @@ export default function Sidebar({
     </aside>
   );
 }
-

@@ -49,7 +49,7 @@ export const handleJournalJob = async (job, {
     job.log(`Upserting vector to Pinecone for journal ${journalId}...`);
     await pcIndex.upsert({
         records: [{
-            id: journalEntry._id.toString(),
+            id: journalId.toString(),
             values: embedding,
             metadata: {
                 roomId: journalEntry.room.toString(),

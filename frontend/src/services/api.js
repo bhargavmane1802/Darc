@@ -2,7 +2,12 @@ const BASE = import.meta.env.VITE_API_URL ||'/api';
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('darc_token');
-  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  const isFormData = options.body instanceof FormData;
+  const headers = { ...options.headers };
+
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
@@ -27,11 +32,29 @@ export const apiLogin = (username, password) =>
 
 export const apiGetUser = () => request('/auth/');
 
+// Profile
+export const apiGetProfile = () => request('/auth/profile/user');
+
+export const apiUpdateProfile = ({ name, about, status }) =>
+  request('/auth/profile/user', {
+    method: 'PATCH',
+    body: JSON.stringify({ name, about, status }),
+  });
+
+export const apiUpdateProfileAvatar = async (file) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  return request('/auth/profile/user/avatar', {
+    method: 'PATCH',
+    body: formData,
+  });
+};
+
 // Rooms
 export const apiCreateRoom = (name, description) =>
   request('/auth/room/create', { method: 'POST', body: JSON.stringify({ name, description }) });
 
-export const apiJoinRoom = (inviteCode) =>request(`/auth/room/join/${inviteCode}`);
+export const apiJoinRoom = (inviteCode) => request(`/auth/room/join/${inviteCode}`);
 
 export const apiDeleteRoom = (name) =>
   request(`/auth/room/remove/${name}`, { method: 'DELETE' });
@@ -41,8 +64,33 @@ export const apiGetMyRooms = () => request('/auth/room/my-rooms');
 // Messages (REST) — paths match backend: /:roomId/create, /:roomId/display, /:roomId/update/:messageId, /:roomId/delete/:messageId
 export const apiGetMessages = (roomId) => request(`/auth/message/${roomId}/display`);
 
-export const apiSendMessage = (roomId, content) =>
-  request(`/auth/message/${roomId}/create`, { method: 'POST', body: JSON.stringify({ content }) });
+export const apiSendMessage = (roomId, contentOrData, maybeImage) => {
+  if (contentOrData instanceof FormData) {
+    return request(`/auth/message/${roomId}/create`, { method: 'POST', body: contentOrData });
+  }
+
+  let content = contentOrData;
+  let imageFile = maybeImage;
+
+  if (contentOrData && typeof contentOrData === 'object' && !(contentOrData instanceof File)) {
+    content = contentOrData.content;
+    imageFile = contentOrData.image || contentOrData.file || maybeImage;
+  }
+
+  if (imageFile) {
+    const formData = new FormData();
+    if (content && typeof content === 'string' && content.trim()) {
+      formData.append('content', content.trim());
+    }
+    formData.append('image', imageFile);
+    return request(`/auth/message/${roomId}/create`, { method: 'POST', body: formData });
+  }
+
+  return request(`/auth/message/${roomId}/create`, {
+    method: 'POST',
+    body: JSON.stringify({ content: (typeof content === 'string' ? content.trim() : content) || '' }),
+  });
+};
 
 export const apiUpdateMessage = (roomId, messageId, content) =>
   request(`/auth/message/${roomId}/update/${messageId}`, { method: 'PUT', body: JSON.stringify({ content }) });
@@ -50,14 +98,36 @@ export const apiUpdateMessage = (roomId, messageId, content) =>
 export const apiDeleteMessage = (roomId, messageId) =>
   request(`/auth/message/${roomId}/delete/${messageId}`, { method: 'DELETE' });
 
-// Journal — paths match backend: /:roomId/create, /:roomId/display, /:roomId/update/:journalId, /:roomId/delete/:journalId
+// Journal — paths match backend: /:roomId/create, /:roomId/display, /:roomId/delete/:journalId
 export const apiGetJournals = (roomId) => request(`/auth/journal/${roomId}/display`);
 
-export const apiCreateJournal = (roomId, content, imageUrl) =>
-  request(`/auth/journal/${roomId}/create`, { method: 'POST', body: JSON.stringify({ content, imageUrl }) });
+export const apiCreateJournal = (roomId, contentOrData, maybeImage) => {
+  if (contentOrData instanceof FormData) {
+    return request(`/auth/journal/${roomId}/create`, { method: 'POST', body: contentOrData });
+  }
 
-export const apiUpdateJournal = (roomId, journalId, content) =>
-  request(`/auth/journal/${roomId}/update/${journalId}`, { method: 'PUT', body: JSON.stringify({ content }) });
+  let content = contentOrData;
+  let imageFile = maybeImage;
+
+  if (contentOrData && typeof contentOrData === 'object' && !(contentOrData instanceof File)) {
+    content = contentOrData.content;
+    imageFile = contentOrData.image || contentOrData.file || maybeImage;
+  }
+
+  if (imageFile) {
+    const formData = new FormData();
+    if (content && typeof content === 'string' && content.trim()) {
+      formData.append('content', content.trim());
+    }
+    formData.append('image', imageFile);
+    return request(`/auth/journal/${roomId}/create`, { method: 'POST', body: formData });
+  }
+
+  return request(`/auth/journal/${roomId}/create`, {
+    method: 'POST',
+    body: JSON.stringify({ content: (typeof content === 'string' ? content.trim() : content) || '' }),
+  });
+};
 
 export const apiDeleteJournal = (roomId, journalId) =>
   request(`/auth/journal/${roomId}/delete/${journalId}`, { method: 'DELETE' });
@@ -68,19 +138,12 @@ export const apiToggleReaction = (roomId, journalId, emoji) =>
 
 // Image Upload — POST /auth/upload (multipart/form-data, no Content-Type header)
 export async function apiUploadImage(file) {
-  const token = localStorage.getItem('darc_token');
   const formData = new FormData();
   formData.append('image', file);
-
-  const res = await fetch(`${BASE}/auth/upload`, {
+  return request('/auth/upload', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}` },
     body: formData,
   });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.message || 'Image upload failed');
-  return data; // { imageUrl, publicId }
 }
 
 // AI Feedback (SSE) — path: /:roomId/aiResponce/:journalId

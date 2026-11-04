@@ -1,21 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { apiGetJournals, apiCreateJournal, apiUpdateJournal, apiDeleteJournal, streamAIFeedback, apiToggleReaction, apiUploadImage } from '../services/api.js';
+import { apiGetJournals, apiCreateJournal, apiDeleteJournal, streamAIFeedback, apiToggleReaction } from '../services/api.js';
 import { getSocket } from '../services/socket.js';
 import { useToast } from '../context/ToastContext.jsx';
+import Avatar from './Avatar.jsx';
 
 const QUICK_REACTIONS = ['👍', '🔥', '🎉', '💡', '❤️'];
 
 export default function JournalPanel({ roomId, user }) {
   const [entries, setEntries] = useState([]);
   const [newContent, setNewContent] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editText, setEditText] = useState('');
   const [aiStreamId, setAiStreamId] = useState(null);
   const [aiText, setAiText] = useState('');
   const [aiRemaining, setAiRemaining] = useState(null);
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null); // { file, url }
-  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   const { addToast } = useToast();
 
@@ -25,12 +23,6 @@ export default function JournalPanel({ roomId, user }) {
     if (!socket) return;
 
     const onCreate = (j) => setEntries((prev) => [...prev, j]);
-    const onUpdate = ({ journal }) => {
-      // Merge update while preserving the populated author (backend sends unpopulated ObjectId)
-      setEntries((prev) => prev.map((e) =>
-        e._id === journal._id ? { ...e, ...journal, author: e.author } : e
-      ));
-    };
     const onDelete = ({ entry_id }) => setEntries((prev) => prev.filter((e) => e._id !== entry_id));
     const onReaction = ({ entryId, reactions }) => {
       setEntries((prev) => prev.map((e) =>
@@ -39,13 +31,11 @@ export default function JournalPanel({ roomId, user }) {
     };
 
     socket.on('create_journal', onCreate);
-    socket.on('update_journal', onUpdate);
     socket.on('delete_journal', onDelete);
     socket.on('reaction_journal', onReaction);
 
     return () => {
       socket.off('create_journal', onCreate);
-      socket.off('update_journal', onUpdate);
       socket.off('delete_journal', onDelete);
       socket.off('reaction_journal', onReaction);
     };
@@ -64,25 +54,7 @@ export default function JournalPanel({ roomId, user }) {
     if (!newContent.trim() && !imagePreview) return;
     setLoading(true);
     try {
-      let imageUrl = null;
-
-      // Upload image if attached
-      if (imagePreview) {
-        setUploading(true);
-        try {
-          const data = await apiUploadImage(imagePreview.file);
-          imageUrl = data.imageUrl;
-        } catch (err) {
-          console.error('Image upload failed:', err);
-          addToast('Image upload failed', 'error');
-          setUploading(false);
-          setLoading(false);
-          return;
-        }
-        setUploading(false);
-      }
-
-      await apiCreateJournal(roomId, newContent.trim(), imageUrl);
+      await apiCreateJournal(roomId, newContent.trim(), imagePreview?.file);
       setNewContent('');
       cancelImagePreview();
     } catch (err) {
@@ -102,17 +74,6 @@ export default function JournalPanel({ roomId, user }) {
   const cancelImagePreview = () => {
     if (imagePreview?.url) URL.revokeObjectURL(imagePreview.url);
     setImagePreview(null);
-  };
-
-  const handleEditSave = async (id) => {
-    if (!editText.trim()) return;
-    try {
-      await apiUpdateJournal(roomId, id, editText.trim());
-      setEditingId(null);
-      setEditText('');
-    } catch (err) {
-      addToast('Failed to update entry', 'error');
-    }
   };
 
   const handleDelete = async (id) => {
@@ -243,13 +204,13 @@ export default function JournalPanel({ roomId, user }) {
               style={{ borderRadius: 'var(--radius-md)', padding: '6px 14px', gap: '6px' }}
               onClick={() => fileInputRef.current?.click()}
               title="Attach image (jpg, png, webp)"
-              disabled={uploading || loading}
+              disabled={loading}
             >
               📎 Image
             </button>
           </div>
-          <button className="btn btn--primary btn--sm" onClick={handleCreate} disabled={loading || uploading || (!newContent.trim() && !imagePreview)}>
-            {loading || uploading ? <span className="spinner" /> : 'Post Entry'}
+          <button className="btn btn--primary btn--sm" onClick={handleCreate} disabled={loading || (!newContent.trim() && !imagePreview)}>
+            {loading ? <span className="spinner" /> : 'Post Entry'}
           </button>
         </div>
       </div>
@@ -269,45 +230,42 @@ export default function JournalPanel({ roomId, user }) {
             })
             .map((entry) => {
               const isJournal = Boolean(entry.updatedAt);
-              const isOwn = entry.author?.username === user?.username;
+              const isOwn = entry.author?.username === user?.username || entry.author?._id === user?.id;
               const isBot = isBotEntry(entry);
+
+              const authorAvatar = isBot ? null : (entry.author?.imageUrl || entry.author?.avatar || (isOwn ? (user?.imageUrl || user?.avatar) : null));
+              const authorName = entry.author?.username || (isOwn ? user?.username : null);
+              const authorFallback = isBot ? '🤖' : (authorName?.[0]?.toUpperCase() || '?');
+
               return (
                 <div key={entry._id} className={`journal-entry glass ${isBot ? 'journal-entry--bot' : ''}`}>
                   <div className="journal-entry__header">
                     <div className="journal-entry__author">
-                      <span className="journal-entry__avatar">
-                        {isBot ? '🤖' : (entry.author?.username?.[0]?.toUpperCase() || '?')}
-                      </span>
+                      <Avatar
+                        as="span"
+                        src={authorAvatar}
+                        alt={authorName || (isBot ? 'AI Mentor' : 'Avatar')}
+                        fallback={authorFallback}
+                        className="journal-entry__avatar"
+                        imgClassName="journal-entry__avatar-img"
+                      />
                       <span className="journal-entry__name">{entry.author?.username || (isBot ? 'AI Mentor' : 'Unknown')}</span>
                       {isBot && <span className="journal-entry__bot-badge">BOT</span>}
                       <span className="journal-entry__date">{formatDate(entry.createdAt, entry)}</span>
                     </div>
                     {isOwn && !isBot && isJournal && (
                       <div className="journal-entry__actions">
-                        <button className="icon-btn icon-btn--sm" onClick={() => { setEditingId(entry._id); setEditText(entry.content); }} title="Edit">✎</button>
                         <button className="icon-btn icon-btn--sm icon-btn--danger" onClick={() => handleDelete(entry._id)} title="Delete">🗑</button>
                       </div>
                     )}
                   </div>
 
-                  {editingId === entry._id && isJournal ? (
-                    <div className="journal-entry__edit">
-                      <textarea className="journal-panel__textarea" value={editText} onChange={(e) => setEditText(e.target.value)} rows={3} autoFocus />
-                      <div className="journal-entry__edit-actions">
-                        <button className="btn btn--primary btn--sm" onClick={() => handleEditSave(entry._id)}>Save</button>
-                        <button className="btn btn--ghost btn--sm" onClick={() => setEditingId(null)}>Cancel</button>
-                      </div>
+                  {entry.imageUrl && (
+                    <div className="journal-entry__image">
+                      <img src={entry.imageUrl} alt="Journal attachment" loading="lazy" />
                     </div>
-                  ) : (
-                    <>
-                      {entry.imageUrl && (
-                        <div className="journal-entry__image">
-                          <img src={entry.imageUrl} alt="Journal attachment" loading="lazy" />
-                        </div>
-                      )}
-                      <p className="journal-entry__content">{renderContent(entry.content)}</p>
-                    </>
                   )}
+                  <p className="journal-entry__content">{renderContent(entry.content)}</p>
 
                   {/* Reactions */}
                   <div className="journal-entry__reactions">

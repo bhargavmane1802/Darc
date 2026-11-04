@@ -14,6 +14,7 @@ import uploadRouter from "./src/routers/upload.routes.js"
 import './src/workers/journal.worker.js'
 import './src/workers/digest.worker.js'
 import cors from "cors";
+import { profileRoutes } from "./src/routers/profile.Router.js"
 const app = express();
 const server = http.createServer(app);
 initSocket(server);
@@ -80,6 +81,7 @@ server.listen(port, () => {
 })
 app.use("/user", userRoutes);
 app.use("/auth/", validate_auth());
+app.use("/auth/profile",profileRoutes);
 app.use("/auth/room", roomRoutes);
 app.use("/auth/journal", journalRoutes);
 app.use("/auth/message", messageRoutes);
