@@ -1,1050 +1,376 @@
-# 🚀 DARC — Developer Collaboration Hub
+# DARC — Developer Collaboration Hub
 
-A **real-time developer collaboration platform** that combines instant messaging, collaborative journaling, and AI-powered insights. DARC enables distributed teams to communicate seamlessly, document ideas in real-time, and receive intelligent feedback to accelerate team growth.
+DARC is a collaborative workspace for software teams. Each room brings together real-time chat, a shared development journal, lightweight presence, and AI-assisted summaries and feedback.
 
-**Live Demo:** [darc-pearl.vercel.app](https://darc-pearl.vercel.app/)
+**Live app:** [darc-nine.vercel.app](https://darc-nine.vercel.app/)  
+**Repository:** [bhargavmane1802/Darc](https://github.com/bhargavmane1802/Darc)
 
----
+> This README describes the implementation currently in the repository. In particular, registration currently creates an account directly: the email-verification handler and email service exist, but the verification flow is not wired into the active registration path.
 
-## 📋 Table of Contents
+## Contents
 
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
+- [What DARC does](#what-darc-does)
 - [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [API Reference](#api-reference)
-- [WebSocket Events](#websocket-events)
-- [Environment Setup](#environment-setup)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-- [License](#license)
+- [Feature details](#feature-details)
+- [Efficiency and reliability](#efficiency-and-reliability)
+- [Technology](#technology)
+- [Repository layout](#repository-layout)
+- [Run locally](#run-locally)
+- [Environment variables](#environment-variables)
+- [HTTP API](#http-api)
+- [Socket.IO events](#socketio-events)
+- [Tests and performance scripts](#tests-and-performance-scripts)
+- [Deployment notes](#deployment-notes)
 
----
+## What DARC does
 
-## 🎯 Overview
+DARC is organized around **rooms**. A member can join a room with an invite code, then switch between its chat and journal. Chat is intended for fast conversation; journal entries preserve project notes and progress over time. Presence and updates are shared with connected room members, while MongoDB remains the durable source for application records.
 
-DARC is a **monorepo** featuring a **React 19 + Vite frontend** and a **Node.js + Express 5 backend**. It leverages:
+Core capabilities:
 
-- **Real-time Communication**: Socket.IO for instant messaging and presence tracking
-- **Vector Search**: Pinecone for semantic search and intelligent context retrieval
-- **AI Integration**: Google Generative AI for streaming feedback on journal entries
-- **Caching & Performance**: Redis for rate limiting, caching, and session management
-- **Scheduled Tasks**: Node Cron for daily digest generation and automated summaries
-- **Email Verification**: Email-based user verification with Redis-backed temporary storage
-- **Cloud Storage**: Cloudinary for reliable image hosting and management
+- Create rooms, invite people with a room code, join and leave rooms, and remove rooms as their owner.
+- Send, edit, delete, and load room messages; attach images to messages.
+- Track active room members, typing activity, and read progress in real time.
+- Create journal entries with optional images, react with emoji, and remove entries.
+- Request streamed AI feedback on a journal entry, informed by semantically similar entries from the same author and room.
+- Generate daily room digests from journal activity.
+- Manage a profile, including profile text and avatar.
+- Use the responsive React application with persistent light/dark theme selection.
 
-This is a **collaborative workspace** where teams can:
-1. Register securely with email verification
-2. Create or join rooms via invite codes for project-based communication
-3. Chat in real-time with typing indicators and read receipts
-4. Document ideas and decisions in shared per-room journals
-5. Get AI-powered analysis and feedback on journal entries with historical context
-6. Add emoji reactions to journal entries for quick feedback
-7. Receive daily AI-generated summaries of room activity (nightly digest job)
+## Architecture
 
----
+### System view
 
-## ✨ Key Features
-
-### 🔐 Authentication & User Management
-- **Email Verification** — Secure registration with MX domain validation and email confirmation
-- **Bcrypt Password Hashing** — Industry-standard password security
-- **JWT-based Authentication** — Secure token generation (1-hour expiry) for API and WebSocket connections
-- **Redis-Backed Verification** — Temporary token storage with 24-hour TTL
-- **User Profiles** — Username, email, avatar support, and status indicators
-- **Session Persistence** — localStorage-based session management
-
-### 💬 Real-Time Messaging
-- **Instant Messaging** — WebSocket-powered delivery with live synchronization
-- **Message History** — Last 30 messages loaded on room join for context
-- **Typing Indicators** — See when others are typing in real-time (2-second timeout)
-- **Read Receipts** — Track message read status across the room via persistent tracking
-- **Image Support** — Send messages with embedded media via Cloudinary
-- **Message Editing** — Update sent messages via REST API with real-time sync
-- **Message Deletion** — Remove messages with cascading cleanup across all systems
-
-### 📔 Collaborative Journaling
-- **Journal Entries** — Rich text notes with optional image attachments
-- **CRUD Operations** — Create, edit, delete entries in real-time
-- **Real-Time Sync** — All room members see updates instantly via WebSocket
-- **Emoji Reactions** — Quick reactions on any journal entry (👍, 🔥, 🎉, 💡, ❤️, and more)
-- **Reaction Broadcasting** — Live reaction updates across the room
-- **Per-Room Journals** — Separate journal namespaces for each collaborative space
-
-### 🤖 AI-Powered Insights
-- **Streaming AI Feedback** — Contextual analysis on journal entries via Server-Sent Events (SSE)
-- **Semantic Context** — Pinecone vector similarity retrieves the 2 most related past entries
-- **Smart Caching** — Redis caches AI responses with 24-hour TTL for instant retrieval
-- **Vector Embeddings** — Automatic semantic indexing of all journal entries using Gemini embeddings (768-dim)
-- **Historical Context** — AI references past entries for informed, continuity-aware feedback
-- **Concise Responses** — AI mentor keeps feedback strictly under 200 words for digestibility
-- **Cascading Deletion** — AI responses and vector embeddings removed when entries are deleted
-
-### 📊 Daily Digest Job
-- **Automated Summaries** — Runs nightly at midnight IST to generate room digests
-- **Sliding Window Processing** — Processes up to 3 rooms concurrently (p-limit concurrency control)
-- **Idempotency** — Redis tracks processed rooms to prevent duplicate digests
-- **AI Bot Persona** — Special "AI Mentor" user (auto-created) posts digests as journal entries
-- **Smart Batching** — MongoDB aggregation groups entries by room for efficiency
-- **Standup Format** — Digests focus on accomplishments and blockers in 3-sentence summaries
-
-### 🏠 Room Management
-- **Create Rooms** — Owner creates collaborative spaces with name and description
-- **Join via Invite Code** — Unique nanoid-based invite codes for easy sharing
-- **Privacy Control** — Room privacy flags (currently set to false by default)
-- **Member Tracking** — Real-time presence awareness with Redis-backed member sets
-- **Owner Permissions** — Only owners can delete rooms
-- **Room Deletion** — Full cascading cleanup of associated data
-- **Presence Expiry** — Redis auto-expires inactive members after 180 seconds (configurable)
-
-### 📤 File Uploads
-- **Cloudinary Integration** — Reliable cloud storage for images
-- **Multipart Form Data** — Efficient file streaming via Multer + Cloudinary adapter
-- **Size Limits** — Frontend enforces 5MB max file size
-- **Automatic URL Generation** — Images embedded directly in messages and journals
-- **Public ID Tracking** — Asset management across the platform
-
-### 🎨 Modern UI/UX
-- **React 19** — Latest features and concurrent rendering optimizations
-- **React Router v7** — Nested routing with lazy loading and protected routes
-- **Vite** — Lightning-fast dev server (HMR) and optimized production builds
-- **Toast Notifications** — Success, error, and info feedback system
-- **Context API** — Auth and notification state management
-- **Responsive Design** — Mobile-first, CSS-driven layout with glassmorphism effects
-- **Landing Page** — Hero section, feature showcase, and CTA-driven design
-- **Real-Time UI Sync** — Immediate visual feedback for all operations
-
----
-
-## 🛠️ Tech Stack
-
-### **Frontend**
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| **React** | 19.2.6 | UI framework with concurrent features |
-| **React Router DOM** | 7.15.0 | Client-side routing with nested routes |
-| **Vite** | 8.0.1 | Build tool & dev server with HMR |
-| **Socket.io-client** | 4.8.3 | Real-time communication client |
-| **ES Modules** | - | Modern JavaScript with tree-shaking |
-
-### **Backend**
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| **Node.js** | 18+ | Runtime environment |
-| **Express** | 5.2.1 | HTTP framework with middleware support |
-| **MongoDB** | - | Document database for persistence |
-| **Mongoose** | 9.3.3 | ODM for MongoDB with schema validation |
-| **Socket.io** | 4.8.3 | WebSocket server for real-time sync |
-| **JWT** | 9.0.3 | Token-based stateless authentication |
-| **Bcrypt** | 6.0.0 | Password hashing and verification |
-| **Google Generative AI** | 0.24.1 | AI feedback streaming (Gemini 2.5 Flash) |
-| **Google GenAI (Embeddings)** | 2.6.0 | Vector embeddings (768-dimensional) |
-| **Pinecone** | 7.2.0 | Vector database for semantic search |
-| **Redis/IORedis** | 5.10.1 | Caching, presence, and session management |
-| **Multer** | 2.1.1 | File upload middleware for images |
-| **Cloudinary** | 1.41.3 | Cloud storage for media assets |
-| **Multer-Storage-Cloudinary** | 4.0.0 | Direct Cloudinary integration with Multer |
-| **Node Cron** | 4.2.1 | Scheduled jobs (daily digest at midnight IST) |
-| **Helmet** | 8.1.0 | Security headers middleware |
-| **CORS** | 2.8.6 | Cross-origin request handling |
-| **Dotenv** | 17.4.2 | Environment variable management |
-| **p-limit** | 7.3.0 | Concurrency control for digest job |
-| **nanoid** | 5.1.7 | Collision-resistant unique ID generation |
-| **Nodemailer** | 8.0.10 | Email sending for verification |
-
----
-
-## 🏗️ Architecture
-
-### **System Design**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     DARC System Architecture                │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────┐          ┌────────────────────────────┐
-│  React Frontend     │          │     Node.js Backend        │
-│  (Port 5173)        │◄────────►│     (Port 8080)            │
-│                     │          │                            │
-│ • Landing Page      │   REST   │ • User Routes (Register)   │
-│ • Auth UI           │    &     │ • Email Verification       │
-│ • ChatPanel         │  Socket  │ • Room Management          │
-│ • JournalPanel      │   .IO    │ • Message Service          │
-│ • RoomModal         │          │ • Journal CRUD + AI        │
-│ • AppShell          │          │ • File Upload              │
-│ • Toast System      │          │ • AI Feedback (SSE)        │
-└─────────────────────┘          │ • Digest Job (Cron)        │
-           │                     └────────────────────────────┘
-           │                               │
-           │                               ├──► MongoDB (Data)
-           │                               ├──► Redis (Cache/Presence)
-           │                               ├──► Pinecone (Vectors)
-           │                               ├──► Cloudinary (Media)
-           │                               ├──► Google GenAI (LLM)
-           │                               └──► Nodemailer (Email)
-           │
-           └──────► .env (Frontend Config)
+```text
+┌─────────────────────────────────────┐
+│ React + Vite browser application     │
+│ pages, components, contexts, services│
+└───────────────┬─────────────────────┘
+                │ HTTP/JSON + SSE
+                │ Socket.IO
+┌───────────────▼─────────────────────┐
+│ Express 5 / Node.js HTTP server      │
+│ auth, room-access middleware, routes │
+│ controllers, Socket.IO event handlers│
+└───────┬───────────┬───────────┬─────┘
+        │           │           │
+   MongoDB       Redis      Cloudinary
+ durable data   cache,      image storage
+                presence,
+                BullMQ
+                  │
+          ┌───────┴────────┐
+          │ BullMQ workers │
+          │ journal vectors│
+          │ room digests   │
+          └───┬────────┬───┘
+              │        │
+          Gemini AI  Pinecone
+          feedback   vector search
+          + summaries
 ```
 
-### **Data Flow**
+The frontend is a Vite-built React single-page application. It calls the backend through a small fetch-based API service and maintains an authenticated Socket.IO connection for room events. The backend creates one HTTP server shared by Express and Socket.IO. Express routes handle request/response operations; Socket.IO handles live collaboration; BullMQ queues keep embedding and digest tasks out of the immediate journal-write path.
 
-```
-User Registration Flow:
-User Input → Validation → DNS Check → Bcrypt Hash → Redis Temp Store → 
-  Email Verification → User Click Link → Email Verification → MongoDB Save
+### Backend request boundaries
 
-Message Send Flow:
-User Input → Validation → MongoDB Save → Broadcast via Socket.IO → 
-  Frontend Update → Read Receipt Tracking
+- **Authentication middleware** verifies bearer JWTs for `/auth` routes. The Socket.IO handshake also verifies a token before accepting the connection.
+- **Room membership middleware** protects room-scoped REST operations. Room membership is checked separately from account authentication.
+- **Routers** map URL patterns and middleware to controller handlers.
+- **Controllers** coordinate persistence and service calls, and emit room updates when connected clients need to reflect a change.
+- **Services and integrations** encapsulate AI generation and email delivery; configuration modules initialize Redis, Pinecone, and Cloudinary clients.
+- **Workers** consume BullMQ queues for journal embedding and daily digest generation. They are loaded by the backend entry point and use dedicated Redis connections required by BullMQ.
 
-Journal Entry Flow:
-Entry Created → Generate Embeddings (768-dim) → Store in Pinecone → 
-  Broadcast to Room → Cache in Redis
+### Main data paths
 
-AI Feedback Flow:
-User Request → Check Redis Cache → If miss: Query Pinecone (top 2 similar) → 
-  Stream Gemini Response → Save to MongoDB → Cache in Redis
+#### Chat and presence
 
-Digest Generation (Nightly):
-Cron Job (Midnight IST) → Aggregate Entries (last 24h) → Group by Room → 
-  Process with p-limit (max 3 concurrent) → Generate AI Summary → 
-  Create Digest Entry → Emit via Socket → Mark in Redis (idempotency)
-```
+1. A client authenticates its socket with its JWT and joins a room.
+2. The server joins the Socket.IO room, updates a Redis presence set, and broadcasts the member list.
+3. The server fetches the latest 30 messages from MongoDB, populates sender display fields, and emits the history to the joining socket.
+4. New chat messages are validated and saved to MongoDB before being broadcast to the room. Typing events are transient socket broadcasts; read progress is persisted as a read-receipt record.
 
-### **Database Schema**
+#### Journal and semantic indexing
 
-```
-User Collection:
-- username (unique, lowercase)
-- email (unique, lowercase)
-- password (bcrypt hashed)
-- name, about, avatar, status
+1. A member creates a journal entry through the authenticated room route. Text and optional Cloudinary image references are persisted in MongoDB.
+2. The entry is immediately broadcast to the room. If it contains text, an embedding job is enqueued rather than making the browser wait for embedding generation.
+3. The journal worker generates an embedding, stores it on the Mongo record, and upserts the vector plus room/author/content metadata into Pinecone.
+4. On an AI-feedback request, the server first checks Redis, then the Mongo entry's saved AI response. On a cache miss it queries Pinecone for up to five candidates filtered to the same room and author, removes the current entry, and uses up to two historical entries as context.
+5. Gemini output is streamed to the client as Server-Sent Events. The completed response is stored on the journal entry, cached in Redis for 24 hours, and its vector metadata is updated.
 
-Room Collection:
-- name (unique)
-- owner (user reference)
-- description
-- isPrivate (boolean)
-- inviteCode (nanoid)
-- members (array of user refs)
-- createdAt
+#### Daily room digest
 
-Message Collection:
-- room (room reference)
-- sender (user reference)
-- content (string, max 1000 chars)
-- imageUrl (Cloudinary)
-- createdAt
+The scheduled job runs at midnight in `Asia/Kolkata`. It queues room IDs in batches of ten. Digest workers retrieve the previous day's journal entries using a MongoDB aggregation, group entries by room, ask Gemini for a summary, and bulk-upsert digest records. Redis records rooms processed for that date; a unique `(room, dateKey)` MongoDB index provides a second guard against duplicate daily digests. Failed work is allowed to retry through BullMQ with exponential backoff.
 
-Journal Collection:
-- room (room reference)
-- author (user reference)
-- content (text)
-- imageUrl (optional)
-- embedding (768-dim vector)
-- aiResponse (cached AI feedback)
-- reaction (array of {emoji, users[]})
-- createdAt, updatedAt
+### Persistence model
 
-ReadReceipt Collection:
-- room (room reference)
-- user (user reference)
-- lastReadMessageId (message reference)
+| Record | Purpose and notable fields |
+| --- | --- |
+| `User` | Account identity, bcrypt password hash, profile text, avatar/image references, status. |
+| `Room` | Name, owner, description, member IDs, privacy flag, invite code, timestamps. |
+| `Message` | Room, sender, text/image, timestamps; indexed by room and descending creation time for room history. |
+| `Journal` | Room, author, text/image, reactions, embedding, AI response, timestamps. |
+| `ReadReceipt` | Per-user room read position. |
+| `Digest` | Room, bot author, summary content, date key; unique room/date index enforces one record per day. |
 
-Redis Keys:
-- room:{room_id}:presence (set of usernames)
-- ai_response:room:{room_id}:journal:{journal_id} (cached AI response)
-- digests:{date} (set of processed room IDs)
-- {nano_id} (temp verification data, 24h TTL)
-```
+MongoDB stores durable application state. Redis is used for ephemeral presence, AI-response caching, digest idempotency state, and BullMQ job transport. Pinecone stores vectors for semantic retrieval; Cloudinary stores uploaded image assets.
 
----
+## Feature details
 
-## 📁 Project Structure
+### Accounts and profiles
 
-```
+- Registration normalizes usernames and email addresses, checks required input and basic email syntax, checks for an existing username/email, and hashes passwords with bcrypt.
+- Login verifies the bcrypt hash and returns a JWT with a one-hour expiry.
+- Profile endpoints read and update profile details and avatar. Profile responses omit the password field.
+- Socket connections use the same signed-token approach at handshake time.
+- **Verification status:** the repository contains a Redis-backed verification handler and an email service, but the active registration controller currently saves the account directly. Do not treat email verification as an active requirement without enabling that flow.
+
+### Rooms and collaboration
+
+- Create a room and share its generated invite code; join an existing room through that code.
+- Owners can delete their rooms; members can leave.
+- The client presents each room's chat and journal as tabs, with a member list and invite-code action.
+- Presence uses Redis sets with a 180-second expiry; connect, switch, leave, and disconnect handlers update room membership broadcasts.
+
+### Chat
+
+- Socket.IO delivers new messages, typing state, and read-progress updates in real time.
+- REST routes provide message history and support message creation, editing, and deletion; image attachments are stored in Cloudinary.
+- Joining a socket room returns the most recent 30 messages. The message schema has a compound room/time index to support this lookup.
+- Server-side socket validation rejects empty text-and-image messages and text longer than 1,000 characters.
+
+### Journal and AI
+
+- Journal entries support text and optional images. Reactions are grouped by emoji and member; reacting again toggles that member's reaction.
+- Journal content is searchable by meaning after its asynchronous embedding job completes.
+- AI feedback uses a Gemini streaming response and a short historical context selected from Pinecone matches for the same room and author.
+- Results are cached for 24 hours in Redis and also saved on the MongoDB journal entry, so later requests can return the saved result without invoking the model again.
+- Deleting a journal entry also attempts to remove its Cloudinary image, Pinecone vector, and Redis AI cache entry, then broadcasts the deletion. External cleanup failures are logged separately so the primary database deletion can still complete.
+- Journal listing merges normal journal entries with daily digest records for the room.
+
+### Daily digests
+
+- A nightly job summarizes the prior day's journal entries, with date boundaries computed in the `Asia/Kolkata` timezone.
+- Summaries are persisted as digest records and shown alongside journal entries.
+- Jobs are split into batches of ten rooms and digest workers are configured with concurrency three.
+- A date-scoped Redis processed-room set, a unique MongoDB room/date index, and retryable queue jobs help avoid duplicate work and recover from transient failures.
+
+### Media and interface
+
+- Multer streams image uploads to Cloudinary; the backend accepts JPG, JPEG, PNG, and WebP and limits files to 5 MB.
+- The React UI includes landing, auth, workspace, profile, chat, journal, room and member interfaces, notification context, and persistent theme selection.
+
+## Efficiency and reliability
+
+DARC uses several practical techniques to keep interactive paths responsive and bound unnecessary work:
+
+- **Move expensive work off the write path:** journal creation persists and broadcasts promptly, then queues embedding generation. AI summaries are requested on demand; daily digests run in background workers.
+- **Limit history payloads:** socket room joins load the newest 30 messages rather than the entire conversation. Read-only Mongoose queries use `lean()` where appropriate, and returned records select fields needed by the client.
+- **Index frequent lookups:** messages have a `{ room: 1, createdAt: -1 }` index; digests have a unique `{ room: 1, dateKey: 1 }` index.
+- **Cache expensive model output:** Redis serves AI responses for 24 hours; MongoDB also persists the response, allowing cache repopulation and serving without another model call.
+- **Bound vector retrieval:** Pinecone queries are filtered by room and author and request a small top-K candidate set before selecting at most two historical examples.
+- **Batch scheduled processing:** daily jobs enqueue ten rooms per batch, aggregate journal data server-side, and use bulk writes rather than one digest write per record.
+- **Control worker concurrency:** the embedding worker processes one job at a time to avoid overloading the embedding API; digest workers run at concurrency three.
+- **Retry transient jobs:** queue additions configure three attempts with exponential backoff starting at two seconds.
+- **Use atomic Redis operations for presence:** related set and expiry operations are grouped in Redis transactions; the socket handler avoids duplicate room joins.
+
+These are implementation choices, not published throughput claims. Use the included token/socket benchmark scripts with a representative deployment to measure actual latency, throughput, and service limits.
+
+## Technology
+
+| Area | Technologies |
+| --- | --- |
+| Frontend | React 19, React Router 7, Vite 8, Socket.IO client, Framer Motion |
+| Backend | Node.js (>=22.3), Express 5, Socket.IO, ES modules |
+| Data | MongoDB, Mongoose, Redis / ioredis |
+| Background jobs | BullMQ, Node Cron |
+| AI and retrieval | Google Gemini APIs, Pinecone |
+| Media and email | Cloudinary, Google Gmail API integration |
+| Security and utilities | JWT, bcrypt, CORS, nanoid, Luxon, Multer |
+
+## Repository layout
+
+```text
 Darc/
-├── backend/                          # Node.js + Express
-│   ├── index.js                      # Server entry point
-│   ├── package.json                  # Backend dependencies
+├── backend/
+│   ├── index.js                 # Express/HTTP/Socket.IO bootstrap; loads workers and digest schedule
+│   ├── package.json             # Backend scripts and dependencies
+│   ├── benchmarks/              # Token-generation and Socket.IO load-test assets
 │   └── src/
-│       ├── config/                   # Configuration files
-│       │   ├── redis.js              # Redis client setup
-│       │   └── pinecone.js           # Pinecone index initialization
-│       │
-│       ├── controllers/              # Request handlers
-│       │   ├── user.controller.js    # Register/Login/Verify logic
-│       │   ├── room.controller.js    # Room CRUD + Invite
-│       │   ├── message.controller.js # Message CRUD
-│       │   └── journal.controller.js # Journal CRUD + AI Feedback
-│       │
-│       ├── model/                    # Mongoose schemas
-│       │   ├── user.model.js         # User schema
-│       │   ├── room.model.js         # Room schema
-│       │   ├── message.model.js      # Message schema
-│       │   ├── journal.model.js      # Journal schema
-│       │   └── readReceipt.model.js  # Read status tracking
-│       │
-│       ├── routers/                  # API route definitions
-│       │   ├── user.Router.js        # /user routes (register, login, verify)
-│       │   ├── room.Router.js        # /auth/room routes
-│       │   ├── message.Router.js     # /auth/message routes (update, delete)
-│       │   ├── journal.Router.js     # /auth/journal routes (CRUD + AI)
-│       │   └── upload.routes.js      # /auth/upload routes (image upload)
-│       │
-│       ├── middlewares/              # Express middleware
-│       │   ├── auth.middleware.js    # JWT verification
-│       │   ├── roomMember.middleware.js # Room access check
-│       │   └── aiRateLimit.middleware.js # Daily credit limit (optional)
-│       │
-│       ├── services/                 # Business logic
-│       │   ├── ai.service.js         # AI feedback + embeddings + digest
-│       │   └── email.service.js      # Email verification sending
-│       │
-│       ├── sockets/                  # WebSocket handlers
-│       │   └── socket.js             # Socket.io event handlers (join, message, typing, etc.)
-│       │
-│       └── jobs/                     # Background tasks
-│           └── digest.job.js         # Daily summary generation (Cron + p-limit)
-│
-├── frontend/                         # React + Vite
-│   ├── index.html                    # HTML entry point
-│   ├── package.json                  # Frontend dependencies
-│   ├── vite.config.js                # Vite configuration
+│       ├── config/              # Redis, Pinecone, and Cloudinary clients
+│       ├── controllers/         # Account, profile, room, message, and journal handlers
+│       ├── jobs/                # Scheduled digest enqueueing
+│       ├── middlewares/         # Authentication, room access, and AI limits
+│       ├── model/               # Mongoose schemas
+│       ├── queue/               # BullMQ queue and Redis connections
+│       ├── routers/             # HTTP route definitions
+│       ├── services/            # AI and email integrations
+│       ├── sockets/             # Socket.IO auth and event handlers
+│       ├── utils/               # Digest date/state helpers
+│       └── workers/             # Embedding and digest consumers
+├── frontend/
+│   ├── package.json
+│   ├── vite.config.js
 │   └── src/
-│       ├── main.jsx                  # React app root
-│       ├── App.jsx                   # Route definitions + Protected routes
-│       │
-│       ├── pages/                    # Full-page components
-│       │   ├── Landing.jsx           # Public landing page with hero & features
-│       │   ├── Auth.jsx              # Login/Register form
-│       │   └── AppShell.jsx          # Main app layout (chat + journal)
-│       │
-│       ├── components/               # Reusable UI components
-│       │   ├── ChatPanel.jsx         # Message interface with editing & reactions
-│       │   ├── JournalPanel.jsx      # Journal interface with AI feedback
-│       │   ├── RoomModal.jsx         # Room creation/join modal
-│       │   └── Toast.jsx             # Notification display
-│       │
-│       ├── context/                  # React Context
-│       │   ├── AuthContext.jsx       # Auth state (token, user)
-│       │   └── ToastContext.jsx      # Toast state & actions
-│       │
-│       ├── services/                 # API & Socket utilities
-│       │   ├── api.js                # REST API wrapper
-│       │   └── socket.js             # Socket.io client initialization
-│       │
-│       ├── styles/                   # CSS modules
-│       │   ├── landing.css           # Landing page styles (glassmorphism)
-│       │   ├── app.css               # Main app styles
-│       │   ├── auth.css              # Auth page styles
-│       │   └── components.css        # Component-specific styles
-│       │
-│       └── assets/                   # Static resources
-│           ├── favicon.svg           # App icon
-│           ├── planet-glow.png       # Landing page decoration
-│           ├── showcase-chat.jpg     # Feature showcase image
-│           ├── showcase-journal.jpg  # Feature showcase image
-│           └── showcase-ai.jpg       # Feature showcase image
-│
-├── package.json                      # Root manifest (workspace)
-├── package-lock.json                 # Dependency lock file
-└── README.md                         # This file
+│       ├── assets/              # UI images and static assets
+│       ├── components/          # Chat, journal, room, profile, and landing components
+│       ├── context/             # Authentication and toast state
+│       ├── pages/               # Landing, auth, workspace, and profile pages
+│       ├── services/            # REST API and Socket.IO clients
+│       └── styles/              # Application and component styles
+├── package.json                # Root manifest
+└── README.md
 ```
 
----
+## Run locally
 
-## 🚀 Getting Started
+### Requirements
 
-### **Prerequisites**
+- Node.js **22.3 or later** and npm.
+- MongoDB and Redis, locally or hosted.
+- Credentials for the external integrations you plan to use: Gemini, Pinecone, and Cloudinary. Gmail OAuth credentials are needed only if you enable the email workflow.
 
-Before you begin, ensure you have:
-
-- **Node.js** v18+ ([Download](https://nodejs.org/))
-- **npm** or **yarn** package manager
-- **MongoDB** instance:
-  - Local: `mongodb://localhost:27017/darc`
-  - Cloud: MongoDB Atlas cluster
-- **Redis** (for caching and presence):
-  - Local: `redis://localhost:6379`
-  - Cloud: Redis Cloud or Upstash
-- **Pinecone** account for vector database (free tier available)
-- **Google Cloud** Generative AI API key (Gemini API)
-- **Cloudinary** account for image hosting
-- **Nodemailer-compatible email service** (Gmail, Resend, or custom SMTP)
-- **Git** for version control
-
-### **Step 1: Clone the Repository**
+### 1. Get the code
 
 ```bash
 git clone https://github.com/bhargavmane1802/Darc.git
 cd Darc
 ```
 
-### **Step 2: Backend Setup**
+### 2. Configure and run the backend
 
 ```bash
 cd backend
 npm install
 ```
 
-#### Create `.env` file in `backend/` directory:
-
-```env
-# Server
-PORT=8080
-
-# Database
-Mongo_Url=mongodb://localhost:27017/darc
-# Or MongoDB Atlas: mongodb+srv://username:password@cluster.mongodb.net/darc
-
-# Authentication
-JWT_SECRET=your_super_secret_jwt_key_min_32_chars_recommended
-Jwt_Key=your_super_secret_jwt_key_min_32_chars_recommended
-
-# Frontend URL (for CORS)
-FRONTEND_URL=http://localhost:5173
-
-# Redis Configuration
-REDIS_URL=redis://localhost:6379
-# Or for Upstash: redis://:password@hostname:port
-
-# Cloudinary (Image Upload)
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-
-# Google Generative AI (Gemini)
-Llm_Api_Key=your_google_generative_ai_api_key
-
-# Pinecone (Vector Database)
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_INDEX_NAME=darc-index
-PINECONE_ENVIRONMENT=production
-
-# Email Service (Nodemailer - Example: Gmail)
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASSWORD=your_app_specific_password
-```
-
-#### Run Backend:
+Create `backend/.env` using the [environment-variable reference](#environment-variables), then start the server:
 
 ```bash
-# Development (with auto-reload via nodemon)
 npm run dev
-
-# Production
-npm start
 ```
 
-Backend will be available at `http://localhost:8080`
+The API and Socket.IO server listen on port `8080` by default (or `PORT` if set).
 
-### **Step 3: Frontend Setup**
+### 3. Configure and run the frontend
+
+In another terminal:
 
 ```bash
-cd ../frontend
+cd frontend
 npm install
 ```
 
-#### Create `.env` file in `frontend/` directory:
+Set `VITE_API_URL` in `frontend/.env` to the backend origin, for example:
 
 ```env
 VITE_API_URL=http://localhost:8080
 ```
 
-#### Run Frontend:
+Then start Vite:
 
 ```bash
 npm run dev
 ```
 
-Frontend will be available at `http://localhost:5173` (or as shown in terminal)
-
-### **Step 4: Visit the Application**
-
-1. Open browser: `http://localhost:5173`
-2. Create an account with email verification
-3. Log in with your credentials
-4. Create or join a room using an invite code
-5. Start chatting and journaling!
-
----
-
-## 📡 API Reference
-
-All authenticated routes require the `Authorization: Bearer <token>` header.
-
-### **Authentication Routes**
-
-#### Register User
-```http
-POST /user/register
-Content-Type: application/json
-
-{
-  "username": "john_doe",
-  "email": "john@example.com",
-  "password": "secure_password_123"
-}
-```
-
-**Response:**
-```json
-{
-  "message": "user register redirect to login page"
-}
-```
-
-#### Verify Email
-```http
-GET /user/verify/:id
-```
-
-**Response:**
-- Redirects to `FRONTEND_URL/login?verified=true` on success
-
-#### Login User
-```http
-POST /user/login
-Content-Type: application/json
-
-{
-  "username": "john_doe",
-  "password": "secure_password_123"
-}
-```
-
-**Response:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
----
-
-### **Room Routes** (Requires Auth)
-
-#### Get My Rooms
-```http
-GET /auth/room/my-rooms
-Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-[
-  {
-    "_id": "room_id",
-    "name": "Project Alpha",
-    "description": "Q4 Planning",
-    "inviteCode": "abc123xyz",
-    "owner": "owner_user_id",
-    "isPrivate": false,
-    "createdAt": "2026-01-15T10:30:00Z"
-  }
-]
-```
-
-#### Create Room
-```http
-POST /auth/room/create
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Project Alpha",
-  "description": "Q4 Planning discussion"
-}
-```
-
-**Response:**
-```json
-{
-  "message": "room created",
-  "room_id": "507f1f77bcf86cd799439011",
-  "inviteCode": "abc123xyz"
-}
-```
-
-#### Join Room
-```http
-GET /auth/room/join/:inviteCode
-Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-{
-  "message": "username joined the room",
-  "room_id": "507f1f77bcf86cd799439011",
-  "name": "Project Alpha",
-  "description": "Q4 Planning"
-}
-```
-
-#### Delete Room (Owner Only)
-```http
-DELETE /auth/room/remove/:roomName
-Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-{
-  "message": "room deleted successfully"
-}
-```
-
----
-
-### **Message Routes** (Requires Auth)
-
-#### Update Message
-```http
-PATCH /auth/message/:roomId/:messageId
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "content": "Updated message text"
-}
-```
-
-**Response:**
-```json
-{
-  "message": "message updated"
-}
-```
-
-#### Delete Message
-```http
-DELETE /auth/message/:roomId/:messageId
-Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-{
-  "message": "message deleted"
-}
-```
-
----
-
-### **Journal Routes** (Requires Auth)
-
-#### Create Journal Entry
-```http
-POST /auth/journal/:roomId
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "content": "Today I debugged the auth flow...",
-  "imageUrl": "optional_cloudinary_url"
-}
-```
-
-**Response:**
-```json
-{
-  "message": "journal entry created"
-}
-```
-
-#### Display All Journal Entries
-```http
-GET /auth/journal/:roomId
-Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-[
-  {
-    "_id": "journal_id",
-    "author": { "_id": "user_id", "username": "john_doe" },
-    "content": "Today I debugged...",
-    "imageUrl": null,
-    "embedding": [...768 values...],
-    "aiResponse": "Great work on debugging...",
-    "reaction": [
-      { "emoji": "👍", "users": ["user_id_2"] }
-    ],
-    "createdAt": "2026-01-15T10:30:00Z"
-  }
-]
-```
-
-#### Update Journal Entry
-```http
-PATCH /auth/journal/:roomId/:journalId
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "content": "Updated content"
-}
-```
-
-**Response:**
-```json
-{
-  "message": "journal updated"
-}
-```
-
-#### Delete Journal Entry
-```http
-DELETE /auth/journal/:roomId/:journalId
-Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-{
-  "message": "journal deleted"
-}
-```
-
-#### Get AI Feedback (SSE Stream)
-```http
-GET /auth/journal/:roomId/:journalId/ai
-Authorization: Bearer <token>
-```
-
-**Response:** Server-Sent Events stream with chunks
-```
-data: {"token":"Great"}
-
-data: {"token":" work"}
-
-data: {"token":"..."}
-
-data: {"token":"[DONE]"}
-```
-
-#### Manage Reactions
-```http
-POST /auth/journal/:journalId/reaction
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "emoji": "👍"
-}
-```
-
-**Response:**
-```json
-[
-  { "emoji": "👍", "users": ["user_id_1", "user_id_2"] }
-]
-```
-
----
-
-### **Upload Routes** (Requires Auth)
-
-#### Upload Image
-```http
-POST /auth/upload
-Authorization: Bearer <token>
-Content-Type: multipart/form-data
-
-file: <binary_image_data>
-```
-
-**Response:**
-```json
-{
-  "imageUrl": "https://res.cloudinary.com/.../image.jpg"
-}
-```
-
----
-
-## 🔌 WebSocket Events
-
-### **Client → Server Events**
-
-#### Join Room
-```javascript
-socket.emit('join_room', { room_id: 'room_uuid' });
-```
-
-#### Switch Room
-```javascript
-socket.emit('switch_room', 'old_room_id');
-```
-
-#### Leave Room
-```javascript
-socket.emit('leave_room', 'room_id');
-```
-
-#### Send Message
-```javascript
-socket.emit('message_send', {
-  room_id: 'room_uuid',
-  content: 'Hello team!',
-  imageUrl: 'optional_url'
-});
-```
-
-#### Typing Start
-```javascript
-socket.emit('typing_start', { room_id: 'room_uuid' });
-```
-
-#### Typing End
-```javascript
-socket.emit('typing_end', { room_id: 'room_uuid' });
-```
-
-#### Read Message
-```javascript
-socket.emit('read_message', 'room_id', 'message_id');
-```
-
----
-
-### **Server → Client Events**
-
-#### Message Display (History)
-```javascript
-socket.on('message_display', (messages) => {
-  // Array of last 30 messages with populated sender
-});
-```
-
-#### New Message
-```javascript
-socket.on('message_new', (message) => {
-  // Single message object with populated sender
-});
-```
-
-#### Update Message
-```javascript
-socket.on('update_message', (message) => {
-  // Updated message object
-});
-```
-
-#### Delete Message
-```javascript
-socket.on('delete_message', (message_id) => {
-  // Message ID to remove from UI
-});
-```
-
-#### Is Typing
-```javascript
-socket.on('is_typing', ({ username, id }) => {
-  // User is typing
-});
-```
-
-#### Stop Typing
-```javascript
-socket.on('stop_typing', ({ username, id }) => {
-  // User stopped typing
-});
-```
-
-#### Room Members
-```javascript
-socket.on('room_members', ({ room_id, members }) => {
-  // Array of member usernames currently in room
-});
-```
-
-#### Read Update
-```javascript
-socket.on('readUpdate_message', ({ room_id, user_id, lastReadMessageId }) => {
-  // User read a message
-});
-```
-
-#### Create Journal
-```javascript
-socket.on('create_journal', (journal) => {
-  // New journal entry with populated author
-});
-```
-
-#### Update Journal
-```javascript
-socket.on('update_journal', ({ journal }) => {
-  // Updated journal entry
-});
-```
-
-#### Delete Journal
-```javascript
-socket.on('delete_journal', ({ entry_id }) => {
-  // Journal entry ID to remove
-});
-```
-
-#### Journal Reaction
-```javascript
-socket.on('reaction_journal', ({ entryId, reactions }) => {
-  // Updated reactions array for entry
-});
-```
-
----
-
-## 🔧 Environment Setup
-
-### **Redis Setup**
-
-**Local (macOS with Homebrew):**
-```bash
-brew install redis
-brew services start redis
-redis-cli ping  # Should return PONG
-```
-
-**Docker:**
-```bash
-docker run -d -p 6379:6379 redis:latest
-```
-
-### **MongoDB Setup**
-
-**Local:**
-```bash
-# macOS
-brew install mongodb-community
-brew services start mongodb-community
-
-# Or use Docker
-docker run -d -p 27017:27017 --name darc-mongo mongo:latest
-```
-
-**Cloud (MongoDB Atlas):**
-1. Create cluster at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
-2. Get connection string: `mongodb+srv://user:pass@cluster.mongodb.net/darc`
-3. Update `Mongo_Url` in `.env`
-
-### **Pinecone Setup**
-
-1. Create account at [pinecone.io](https://www.pinecone.io/)
-2. Create index named `darc-index` with dimension `768` (matches Gemini embeddings)
-3. Get API key from dashboard
-4. Update `.env` with `PINECONE_API_KEY` and `PINECONE_INDEX_NAME`
-
-### **Google Generative AI Setup**
-
-1. Go to [Google AI Studio](https://aistudio.google.com/apikey)
-2. Create API key for free
-3. Update `Llm_Api_Key` in `.env`
-
-### **Cloudinary Setup**
-
-1. Create account at [cloudinary.com](https://cloudinary.com/)
-2. Get Cloud Name, API Key, and API Secret
-3. Update `.env` with these values
-
-### **Email Service Setup (Gmail Example)**
-
-1. Enable 2-Factor Authentication on your Gmail account
-2. Generate App Password: [accounts.google.com/apppasswords](https://accounts.google.com/apppasswords)
-3. Update `.env`:
-   ```env
-   EMAIL_USER=your_email@gmail.com
-   EMAIL_PASSWORD=your_app_password
-   ```
-
----
-
-## 🚢 Deployment
-
-### **Deploy to Vercel (Frontend)**
+Open the local URL printed by Vite (normally `http://localhost:5173`). Configure `FRONTEND_URL` on the backend to that exact origin for CORS. Create an account, sign in, and create or join a room.
+
+## Environment variables
+
+Create a private `backend/.env`; never commit credentials. Variable names below follow the current backend source, including its existing capitalization.
+
+| Variable | Used for |
+| --- | --- |
+| `PORT` | Backend HTTP/Socket.IO port; defaults to `8080`. |
+| `Mongo_Url` | MongoDB connection string. |
+| `FRONTEND_URL` | Allowed browser origin and verification redirect origin. |
+| `Jwt_Key` | Secret used to sign and verify API and Socket.IO JWTs. Use a long, random secret. |
+| `REDIS_URL` | Redis connection for application state and BullMQ; code has a localhost fallback for development. |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary account cloud name. |
+| `CLOUDINARY_API_KEY` | Cloudinary API key. |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret. |
+| `PINECONE_API_KEY` | Pinecone API key; current configuration selects the `airesponse` index in code. |
+| `Llm_Api_Key1` | Gemini key configured for digest worker 1. |
+| `Llm_Api_Key2` | Gemini key used by journal AI/embedding service and digest worker 2. |
+| `GOOGLE_CLIENT_ID` | Gmail OAuth client ID for the email helper. |
+| `GOOGLE_CLIENT_SECRET` | Gmail OAuth client secret for the email helper. |
+| `REFRESH_TOKEN` | Gmail OAuth refresh token for the email helper. |
+| `BACKEND_URL` | Backend base URL used when constructing email-verification links. |
+
+The frontend reads `VITE_API_URL` from `frontend/.env`. The backend's active registration path currently does not send a verification email, despite the email-related helper and route being present.
+
+## HTTP API
+
+All `/auth/*` routes require `Authorization: Bearer <JWT>`. Room-scoped message and journal routes additionally apply room-membership checks. The exact request bodies are implemented in the route/controller files.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/user/register` | Register with username, password, and email. |
+| `POST` | `/user/login` | Authenticate and receive a JWT. |
+| `GET` | `/user/verify/:id` | Legacy Redis-backed email verification handler; not part of active registration. |
+| `GET` | `/auth/profile/user` | Read current profile. |
+| `PATCH` | `/auth/profile/user` | Update profile text/status. |
+| `PATCH` | `/auth/profile/user/avatar` | Upload/update profile avatar (`image` form field). |
+| `GET` | `/auth/room/my-rooms` | List the signed-in user's rooms. |
+| `POST` | `/auth/room/create` | Create a room. |
+| `GET` | `/auth/room/join/:inviteCode` | Join a room by invite code. |
+| `DELETE` | `/auth/room/remove/:name` | Delete a room (owner only). |
+| `GET` | `/auth/message/:roomId/display` | Load room messages. |
+| `POST` | `/auth/message/:roomId/create` | Create a message, optionally with an image. |
+| `PUT` | `/auth/message/:roomId/update/:messageId` | Edit a message. |
+| `DELETE` | `/auth/message/:roomId/delete/:messageId` | Delete a message. |
+| `GET` | `/auth/journal/:roomId/display` | List journal entries and room digests. |
+| `POST` | `/auth/journal/:roomId/create` | Create a journal entry, optionally with an image. |
+| `DELETE` | `/auth/journal/:roomId/delete/:journalId` | Delete a journal entry and attempt related asset/cache/vector cleanup. |
+| `GET` | `/auth/journal/:roomId/aiResponse/:journalId` | Stream AI feedback as Server-Sent Events. |
+| `PATCH` | `/auth/journal/:roomId/reaction/:journalId` | Toggle an emoji reaction. |
+| `POST` | `/auth/upload` | Upload an image (`image` multipart field; max 5 MB). |
+
+The AI endpoint emits SSE `data:` events containing JSON with `token` chunks, followed by a `[DONE]` token. Errors are sent as JSON data events.
+
+## Socket.IO events
+
+Connections authenticate with the JWT in the Socket.IO handshake `auth.token` field. Clients should join only rooms they are authorized to access through the application.
+
+| Direction | Event | Data / behavior |
+| --- | --- | --- |
+| Client → server | `join_room` | `{ room_id }`; joins the socket room, updates presence, and returns recent message history. |
+| Client → server | `switch_room` | Previous room ID; removes the user from its presence set and leaves it. |
+| Client → server | `leave_room` | Room ID; removes the user from the room membership and presence. |
+| Client → server | `message_send` | `{ room_id, content, imageUrl }`; validates, persists, and broadcasts a message. |
+| Client → server | `typing_start` / `typing_end` | `{ room_id }`; transient typing state. |
+| Client → server | `read_message` | `(room_id, message_id)`; advances persisted read progress. |
+| Server → client | `message_display` | Recent message history sent to the joining socket. |
+| Server → client | `message_new` | Newly saved room message. |
+| Server → client | `update_message` / `delete_message` | Message edit/deletion notifications. |
+| Server → client | `is_typing` / `stop_typing` | Typing user's username and ID. |
+| Server → client | `room_members` | `{ room_id, members }` presence update. |
+| Server → client | `readUpdate_message` | `{ room_id, user_id, lastReadMessageId }` read-progress update. |
+| Server → client | `create_journal` / `update_journal` / `delete_journal` | Journal change notifications. |
+| Server → client | `reaction_journal` | `{ entryId, reactions }` updated reaction groups. |
+| Server → client | `error` | `{ message }` for a socket operation error. |
+
+## Tests and performance scripts
+
+From `backend/`:
 
 ```bash
-cd frontend
-npm run build
-vercel deploy
+npm test                 # Node.js built-in test runner
+npm run bench:tokens     # Generate benchmark token data
+npm run bench:socket     # Run the Artillery Socket.IO load scenario
+npm run bench:report     # Build an Artillery report from the saved run
 ```
 
-### **Deploy to Render/Railway (Backend)**
+The Socket.IO benchmark uses Artillery; install it in your environment if it is not already available. Benchmark outputs and results are local run artifacts, not guarantees of production performance. Run tests and load tests against isolated development/test services, not production data.
 
-1. Push to GitHub
-2. Connect repository to Render/Railway
-3. Set environment variables in dashboard
-4. Deploy
+## Deployment notes
 
-### **MongoDB Atlas**
-
-Already configured for cloud deployment.
-
-### **Redis Cloud**
-
-1. Create cluster at [redis.com](https://redis.com)
-2. Update `REDIS_URL` in backend `.env`
-
-### **Production Checklist**
-
-- [ ] Set `FRONTEND_URL` to production domain
-- [ ] Update CORS origins
-- [ ] Change JWT_SECRET to strong random value
-- [ ] Enable HTTPS for all services
-- [ ] Set up monitoring and logging
-- [ ] Configure rate limiting
-- [ ] Test email verification flow
-- [ ] Verify Pinecone indexing works
-- [ ] Test AI feedback streaming
-- [ ] Validate daily digest job
+- Build and host the frontend with Vite-compatible static hosting (the repository's Vercel configuration is under `frontend/`). Set `VITE_API_URL` to the deployed backend URL.
+- Deploy the backend to a Node.js host that supports long-lived HTTP connections for Socket.IO and SSE. Set `PORT` and all required secrets in the host's environment configuration.
+- Use managed MongoDB and Redis services for production. BullMQ workers depend on Redis; journal vector indexing and digest processing also depend on Gemini and Pinecone credentials.
+- Set `FRONTEND_URL` to the exact production frontend origin and configure the host/proxy to permit WebSocket upgrades and SSE streaming.
+- Use HTTPS, strong secrets, restricted CORS origins, and appropriately scoped service credentials. Do not expose server-only credentials through `VITE_` variables.
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Commit changes: `git commit -m 'Add your feature'`
-4. Push to branch: `git push origin feature/your-feature`
-5. Submit a Pull Request
-
-Please ensure:
-- Code follows existing style
-- Tests pass (if applicable)
-- README is updated for new features
-
----
-
-## 📝 License
-
-This project is open source. Check the LICENSE file for details.
-
----
-
-## 🎯 Future Enhancements
-
-- [ ] Message threads and replies
-- [ ] User mentions and @notifications
-- [ ] Voice/video chat integration
-- [ ] Advanced search with filters
-- [ ] Custom emoji reactions
-- [ ] Journal entry templates
-- [ ] Team analytics dashboard
-- [ ] Integration with GitHub/GitLab
-- [ ] Mobile app (React Native)
-- [ ] Offline support with sync
-- [ ] End-to-end encryption option
-- [ ] Two-factor authentication
-
----
-
-**Made with ❤️ by [bhargavmane1802](https://github.com/bhargavmane1802)**
+DARC is an evolving project. If behavior changes, update this document alongside the corresponding routes, models, worker flows, and deployment configuration.
