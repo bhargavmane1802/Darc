@@ -1,4 +1,3 @@
 .dockerIgnore
 Dockerfile
-test 
 benchmarks
