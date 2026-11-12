@@ -5,7 +5,7 @@ DARC is a collaborative workspace for software teams. Each room brings together 
 **Live app:** [darc-pearl.vercel.app](https://darc-pearl.vercel.app/app)  
 **Repository:** [bhargavmane1802/Darc](https://github.com/bhargavmane1802/Darc)
 
-> This README describes the implementation currently in the repository. In particular, registration currently creates an account directly: the email-verification handler and email service exist, but the verification flow is not wired into the active registration path.
+> This README describes the implementation currently in the repository. In particular, registration currently creates an account directly: the email-verification handler and email service exist, but the active registration flow does not send verification mail.
 
 ## Contents
 
@@ -24,7 +24,7 @@ DARC is a collaborative workspace for software teams. Each room brings together 
 
 ## What DARC does
 
-DARC is organized around **rooms**. A member can join a room with an invite code, then switch between its chat and journal. Chat is intended for fast conversation; journal entries preserve project notes and progress over time. Presence and updates are shared with connected room members, while MongoDB remains the durable source for application records.
+DARC is organized around **rooms**. A member can join a room with an invite code, then switch between its chat and journal. Chat is intended for fast conversation; journal entries preserve project context and longer-form thinking.
 
 Core capabilities:
 
@@ -55,7 +55,7 @@ Core capabilities:
 └───────┬───────────┬───────────┬─────┘
         │           │           │
    MongoDB       Redis      Cloudinary
- durable data   cache,      image storage
+durable data   cache,      image storage
                 presence,
                 BullMQ
                   │
@@ -70,7 +70,7 @@ Core capabilities:
           + summaries
 ```
 
-The frontend is a Vite-built React single-page application. It calls the backend through a small fetch-based API service and maintains an authenticated Socket.IO connection for room events. The backend creates one HTTP server shared by Express and Socket.IO. Express routes handle request/response operations; Socket.IO handles live collaboration; BullMQ queues keep embedding and digest tasks out of the immediate journal-write path.
+The frontend is a Vite-built React single-page application. It calls the backend through a small fetch-based API service and maintains an authenticated Socket.IO connection for room events. The backend exposes the room-oriented API and handles async work with Redis-backed queues and AI services.
 
 ### Backend request boundaries
 
@@ -95,12 +95,12 @@ The frontend is a Vite-built React single-page application. It calls the backend
 1. A member creates a journal entry through the authenticated room route. Text and optional Cloudinary image references are persisted in MongoDB.
 2. The entry is immediately broadcast to the room. If it contains text, an embedding job is enqueued rather than making the browser wait for embedding generation.
 3. The journal worker generates an embedding, stores it on the Mongo record, and upserts the vector plus room/author/content metadata into Pinecone.
-4. On an AI-feedback request, the server first checks Redis, then the Mongo entry's saved AI response. On a cache miss it queries Pinecone for up to five candidates filtered to the same room and author, removes the current entry, and uses up to two historical entries as context.
+4. On an AI-feedback request, the server first checks Redis, then the Mongo entry's saved AI response. On a cache miss it queries Pinecone for up to five candidates filtered to the same room and author.
 5. Gemini output is streamed to the client as Server-Sent Events. The completed response is stored on the journal entry, cached in Redis for 24 hours, and its vector metadata is updated.
 
 #### Daily room digest
 
-The scheduled job runs at midnight in `Asia/Kolkata`. It queues room IDs in batches of ten. Digest workers retrieve the previous day's journal entries using a MongoDB aggregation, group entries by room, ask Gemini for a summary, and bulk-upsert digest records. Redis records rooms processed for that date; a unique `(room, dateKey)` MongoDB index provides a second guard against duplicate daily digests. Failed work is allowed to retry through BullMQ with exponential backoff.
+The scheduled job runs at midnight in `Asia/Kolkata`. It queues room IDs in batches of ten. Digest workers retrieve the previous day's journal entries using a MongoDB aggregation, group entries by room, and summarize them for posting as a digest record.
 
 ### Persistence model
 
@@ -113,7 +113,7 @@ The scheduled job runs at midnight in `Asia/Kolkata`. It queues room IDs in batc
 | `ReadReceipt` | Per-user room read position. |
 | `Digest` | Room, bot author, summary content, date key; unique room/date index enforces one record per day. |
 
-MongoDB stores durable application state. Redis is used for ephemeral presence, AI-response caching, digest idempotency state, and BullMQ job transport. Pinecone stores vectors for semantic retrieval; Cloudinary stores uploaded image assets.
+MongoDB stores durable application state. Redis is used for ephemeral presence, AI-response caching, digest idempotency state, and BullMQ job transport. Pinecone stores vectors for semantic retrieval; Cloudinary stores uploaded images.
 
 ## Feature details
 
@@ -123,7 +123,7 @@ MongoDB stores durable application state. Redis is used for ephemeral presence, 
 - Login verifies the bcrypt hash and returns a JWT with a one-hour expiry.
 - Profile endpoints read and update profile details and avatar. Profile responses omit the password field.
 - Socket connections use the same signed-token approach at handshake time.
-- **Verification status:** the repository contains a Redis-backed verification handler and an email service, but the active registration controller currently saves the account directly. Do not treat email verification as an active requirement without enabling that flow.
+- **Verification status:** the repository contains a Redis-backed verification handler and an email service, but the active registration controller currently saves the account directly. Do not treat verification as enabled in the current build.
 
 ### Rooms and collaboration
 
@@ -145,7 +145,7 @@ MongoDB stores durable application state. Redis is used for ephemeral presence, 
 - Journal content is searchable by meaning after its asynchronous embedding job completes.
 - AI feedback uses a Gemini streaming response and a short historical context selected from Pinecone matches for the same room and author.
 - Results are cached for 24 hours in Redis and also saved on the MongoDB journal entry, so later requests can return the saved result without invoking the model again.
-- Deleting a journal entry also attempts to remove its Cloudinary image, Pinecone vector, and Redis AI cache entry, then broadcasts the deletion. External cleanup failures are logged separately so the primary database deletion can still complete.
+- Deleting a journal entry also attempts to remove its Cloudinary image, Pinecone vector, and Redis AI cache entry, then broadcasts the deletion. External cleanup failures are logged separately so the entry can still be removed from the app state.
 - Journal listing merges normal journal entries with daily digest records for the room.
 
 ### Daily digests
@@ -164,8 +164,8 @@ MongoDB stores durable application state. Redis is used for ephemeral presence, 
 
 DARC uses several practical techniques to keep interactive paths responsive and bound unnecessary work:
 
-- **Move expensive work off the write path:** journal creation persists and broadcasts promptly, then queues embedding generation. AI summaries are requested on demand; daily digests run in background workers.
-- **Limit history payloads:** socket room joins load the newest 30 messages rather than the entire conversation. Read-only Mongoose queries use `lean()` where appropriate, and returned records select fields needed by the client.
+- **Move expensive work off the write path:** journal creation persists and broadcasts promptly, then queues embedding generation. AI summaries are requested on demand; daily digests run in background jobs.
+- **Limit history payloads:** socket room joins load the newest 30 messages rather than the entire conversation. Read-only Mongoose queries use `lean()` where appropriate, and returned records are shaped to avoid unnecessary fields.
 - **Index frequent lookups:** messages have a `{ room: 1, createdAt: -1 }` index; digests have a unique `{ room: 1, dateKey: 1 }` index.
 - **Cache expensive model output:** Redis serves AI responses for 24 hours; MongoDB also persists the response, allowing cache repopulation and serving without another model call.
 - **Bound vector retrieval:** Pinecone queries are filtered by room and author and request a small top-K candidate set before selecting at most two historical examples.
@@ -174,7 +174,7 @@ DARC uses several practical techniques to keep interactive paths responsive and 
 - **Retry transient jobs:** queue additions configure three attempts with exponential backoff starting at two seconds.
 - **Use atomic Redis operations for presence:** related set and expiry operations are grouped in Redis transactions; the socket handler avoids duplicate room joins.
 
-These are implementation choices, not published throughput claims. Use the included token/socket benchmark scripts with a representative deployment to measure actual latency, throughput, and service limits.
+These are implementation choices, not published throughput claims. Use the included token/socket benchmark scripts with a representative deployment to measure actual latency, throughput, and server behavior.
 
 ## Technology
 
@@ -206,6 +206,14 @@ Darc/
 │       ├── routers/             # HTTP route definitions
 │       ├── services/            # AI and email integrations
 │       ├── sockets/             # Socket.IO auth and event handlers
+│       ├── test/                # Backend test suite for controllers, services, sockets, jobs, middleware, and workers
+│       │   ├── controllers/    # Controller behavior tests
+│       │   ├── helpers/         # Shared mocks and test setup
+│       │   ├── jobs/            # Job and queue tests
+│       │   ├── middlewares/     # Middleware tests
+│       │   ├── services/        # AI and email service tests
+│       │   ├── sockets/         # Socket auth and handler tests
+│       │   └── workers/         # Worker tests
 │       ├── utils/               # Digest date/state helpers
 │       └── workers/             # Embedding and digest consumers
 ├── frontend/
@@ -273,7 +281,7 @@ Then start Vite:
 npm run dev
 ```
 
-Open the local URL printed by Vite (normally `http://localhost:5173`). Configure `FRONTEND_URL` on the backend to that exact origin for CORS. Create an account, sign in, and create or join a room.
+Open the local URL printed by Vite (normally `http://localhost:5173`). Configure `FRONTEND_URL` on the backend to that exact origin for CORS. Create an account, sign in, and create or join a room to exercise the application.
 
 ## Environment variables
 
@@ -301,7 +309,7 @@ The frontend reads `VITE_API_URL` from `frontend/.env`. The backend's active reg
 
 ## HTTP API
 
-All `/auth/*` routes require `Authorization: Bearer <JWT>`. Room-scoped message and journal routes additionally apply room-membership checks. The exact request bodies are implemented in the route/controller files.
+All `/auth/*` routes require `Authorization: Bearer <JWT>`. Room-scoped message and journal routes additionally apply room-membership checks. The exact request bodies are implemented in the route handlers and controller logic.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -352,6 +360,8 @@ Connections authenticate with the JWT in the Socket.IO handshake `auth.token` fi
 
 ## Tests and performance scripts
 
+The repository includes a dedicated backend test suite under `backend/src/test/` covering controllers, middleware, services, jobs, sockets, and workers.
+
 From `backend/`:
 
 ```bash
@@ -361,7 +371,7 @@ npm run bench:socket     # Run the Artillery Socket.IO load scenario
 npm run bench:report     # Build an Artillery report from the saved run
 ```
 
-The Socket.IO benchmark uses Artillery; install it in your environment if it is not already available. Benchmark outputs and results are local run artifacts, not guarantees of production performance. Run tests and load tests against isolated development/test services, not production data.
+The Socket.IO benchmark uses Artillery; install it in your environment if it is not already available. Benchmark outputs and results are local run artifacts, not guarantees of production performance.
 
 ## Deployment notes
 
