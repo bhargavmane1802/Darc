@@ -20,6 +20,7 @@ DARC is a collaborative workspace for software teams. Each room brings together 
 - [HTTP API](#http-api)
 - [Socket.IO events](#socketio-events)
 - [Tests and performance scripts](#tests-and-performance-scripts)
+- [Test file overview](#test-file-overview)
 - [Deployment notes](#deployment-notes)
 
 ## What DARC does
@@ -55,7 +56,7 @@ Core capabilities:
 └───────┬───────────┬───────────┬─────┘
         │           │           │
    MongoDB       Redis      Cloudinary
- durable data   cache,      image storage
+durable data   cache,      image storage
                 presence,
                 BullMQ
                   │
@@ -70,7 +71,7 @@ Core capabilities:
           + summaries
 ```
 
-The frontend is a Vite-built React single-page application. It calls the backend through a small fetch-based API service and maintains an authenticated Socket.IO connection for room events. The backend creates one HTTP server shared by Express and Socket.IO. Express routes handle request/response operations; Socket.IO handles live collaboration; BullMQ queues keep embedding and digest tasks out of the immediate journal-write path.
+The frontend is a Vite-built React single-page application. It calls the backend through a small fetch-based API service and maintains an authenticated Socket.IO connection for room events. The backend creates one HTTP server shared by Express and Socket.IO. Express routes handle requests/responses; Socket.IO handles live collaboration; BullMQ queues keep embedding and digest tasks out of the immediate journal-write path.
 
 ### Backend request boundaries
 
@@ -100,7 +101,7 @@ The frontend is a Vite-built React single-page application. It calls the backend
 
 #### Daily room digest
 
-The scheduled job runs at midnight in `Asia/Kolkata`. It queues room IDs in batches of ten. Digest workers retrieve the previous day's journal entries using a MongoDB aggregation, group entries by room, ask Gemini for a summary, and bulk-upsert digest records. Redis records rooms processed for that date; a unique `(room, dateKey)` MongoDB index provides a second guard against duplicate daily digests. Failed work is allowed to retry through BullMQ with exponential backoff.
+The scheduled job runs at midnight in `Asia/Kolkata`. It queues room IDs in batches of ten. Digest workers retrieve the previous day's journal entries using a MongoDB aggregation, group entries by room, ask Gemini for a summary, and bulk-upsert digest records. Redis records rooms processed for that date; a unique `(room, dateKey)` MongoDB index prevents duplicate daily digests. Failed work is allowed to retry through BullMQ with exponential backoff.
 
 ### Persistence model
 
@@ -362,6 +363,28 @@ npm run bench:report     # Build an Artillery report from the saved run
 ```
 
 The Socket.IO benchmark uses Artillery; install it in your environment if it is not already available. Benchmark outputs and results are local run artifacts, not guarantees of production performance. Run tests and load tests against isolated development/test services, not production data.
+
+### Test file overview
+
+The backend test suite is organized by feature and layer so each area can be validated independently:
+
+- `backend/src/test/controllers/user.controller.test.js` — covers registration, login, and email-verification validation paths.
+- `backend/src/test/controllers/room.controller.test.js` — checks room creation, joining, deletion, and room listing behaviour.
+- `backend/src/test/controllers/message.controller.test.js` — validates chat message creation, editing, deletion, and display logic.
+- `backend/src/test/controllers/profile.controller.test.js` — verifies profile read/update flows and avatar handling.
+- `backend/src/test/controllers/journal.aiResponses.test.js` — tests AI feedback streaming, Redis cache hits, and Pinecone context retrieval.
+- `backend/src/test/controllers/journal.displayEntries.test.js` — verifies journal listing and query error handling.
+- `backend/src/test/controllers/journal.deleteEntries.test.js` — covers cascading delete logic for journal entries, Pinecone vectors, and Redis cache cleanup.
+- `backend/src/test/controllers/journal.manageReaction.test.js` — checks emoji reaction add/remove logic and socket updates.
+- `backend/src/test/controllers/journal.updateEntries.test.js` — legacy update-flow coverage; this file is currently skipped.
+- `backend/src/test/journal.controller.test.js` — generic journal creation tests for queueing, validation, and save failures.
+- `backend/src/test/middlewares/*.test.js` — validates auth middleware, room membership checks, and AI rate limiting.
+- `backend/src/test/services/*.test.js` — covers AI generation and email-sending behaviour.
+- `backend/src/test/sockets/*.test.js` — validates Socket.IO auth and event handlers.
+- `backend/src/test/jobs/digest.job.test.js` — tests daily digest bot creation and room digest processing.
+- `backend/src/test/workers/journal.worker.test.js` — checks journal embedding worker validation, Mongo updates, and Pinecone upserts.
+
+This structure keeps the suite easy to follow and allows each backend feature to be tested in isolation without affecting unrelated areas of the project.
 
 ## Deployment notes
 
