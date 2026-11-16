@@ -46,6 +46,218 @@ export const updateProfileAvatar=async (req,res,next)=>{
         next(err)
     }
 }
-export const resetPassword=async()=>{
 
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Socket.IO Equivalent Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Socket.IO equivalent of profileDetails
+ * Event: "profile_details" or "get_profile"
+ * Emits to caller: "profile_details" (or executes callback)
+ */
+const profileDetailsSocket = (...args) => {
+    if (args.length >= 2 && args[1] && typeof args[1].emit === "function") {
+        return profileDetailsSocket()(args[0], args[1], args[2], args[3]);
+    }
+    let UserModel = user_Model;
+
+    if (args.length === 1 && args[0] && typeof args[0] === "object" && !args[0].schema) {
+        if (args[0].UserModel) UserModel = args[0].UserModel;
+    } else if (args[0]) {
+        UserModel = args[0];
+    }
+
+    return async (data = {}, socket, io, callback) => {
+        try {
+            const id = socket?.user?.id || socket?.user?._id || data?.id || data?.userId;
+            if (!id) {
+                if (typeof callback === "function") {
+                    return callback({ status: 401, message: "Unauthorized: user id missing" });
+                }
+                socket?.emit("error", { message: "Unauthorized: user id missing" });
+                return;
+            }
+
+            const profile = await UserModel.findById(id).select('-password').lean();
+            if (!profile) {
+                if (typeof callback === "function") {
+                    return callback({ status: 404, message: "user not found" });
+                }
+                socket?.emit("error", { message: "user not found" });
+                return;
+            }
+
+            const resolvedImage = profile.imageUrl || profile.avatar || null;
+            profile.imageUrl = resolvedImage;
+            profile.avatar = resolvedImage;
+
+            if (typeof callback === "function") {
+                callback({ status: 200, data: profile });
+            }
+            socket?.emit("profile_details", profile);
+            return profile;
+        } catch (err) {
+            console.error("Failed to get profile details (socket):", err);
+            err.message = "Failed profileDetails";
+            if (typeof callback === "function") {
+                callback({ status: 500, message: "Failed profileDetails", error: err.message });
+            }
+            socket?.emit("error", { message: "Failed profileDetails", error: err.message });
+        }
+    };
+};
+
+/**
+ * Socket.IO equivalent of updateProfileDetails
+ * Event: "profile_update" or "update_profile"
+ * Emits to caller: "profile_updated" (or executes callback)
+ */
+const updateProfileDetailsSocket = (...args) => {
+    if (args.length >= 2 && args[1] && typeof args[1].emit === "function") {
+        return updateProfileDetailsSocket()(args[0], args[1], args[2], args[3]);
+    }
+    let UserModel = user_Model;
+
+    if (args.length === 1 && args[0] && typeof args[0] === "object" && !args[0].schema) {
+        if (args[0].UserModel) UserModel = args[0].UserModel;
+    } else if (args[0]) {
+        UserModel = args[0];
+    }
+
+    return async (data = {}, socket, io, callback) => {
+        try {
+            const id = socket?.user?.id || socket?.user?._id || data?.id || data?.userId;
+            if (!id) {
+                if (typeof callback === "function") {
+                    return callback({ status: 401, message: "Unauthorized: user id missing" });
+                }
+                socket?.emit("error", { message: "Unauthorized: user id missing" });
+                return;
+            }
+
+            const { name, about, status } = data;
+            const updatedProfile = await UserModel.findByIdAndUpdate(
+                id,
+                { $set: { name, about, status } },
+                { new: true }
+            ).select('-password');
+
+            if (!updatedProfile) {
+                if (typeof callback === "function") {
+                    return callback({ status: 404, message: "user not found" });
+                }
+                socket?.emit("error", { message: "user not found" });
+                return;
+            }
+
+            if (typeof callback === "function") {
+                callback({ status: 200, data: updatedProfile });
+            }
+            socket?.emit("profile_updated", updatedProfile);
+            return updatedProfile;
+        } catch (err) {
+            console.error("Failed to update profile details (socket):", err);
+            err.message = "Failed updateProfileDetails";
+            if (typeof callback === "function") {
+                callback({ status: 500, message: "Failed updateProfileDetails", error: err.message });
+            }
+            socket?.emit("error", { message: "Failed updateProfileDetails", error: err.message });
+        }
+    };
+};
+
+/**
+ * Socket.IO equivalent of updateProfileAvatar
+ * Event: "avatar_update" or "update_avatar"
+ * Emits to caller: "avatar_updated" (or executes callback)
+ */
+const updateProfileAvatarSocket = (...args) => {
+    if (args.length >= 2 && args[1] && typeof args[1].emit === "function") {
+        return updateProfileAvatarSocket()(args[0], args[1], args[2], args[3]);
+    }
+    let UserModel = user_Model;
+    let deleteImageFn = deleteImage;
+
+    if (args.length === 1 && args[0] && typeof args[0] === "object" && !args[0].schema) {
+        if (args[0].UserModel) UserModel = args[0].UserModel;
+        if (args[0].deleteImage) deleteImageFn = args[0].deleteImage;
+    } else {
+        if (args[0]) UserModel = args[0];
+        if (args[1]) deleteImageFn = args[1];
+    }
+
+    return async (data = {}, socket, io, callback) => {
+        try {
+            const id = socket?.user?.id || socket?.user?._id || data?.id || data?.userId;
+            if (!id) {
+                if (typeof callback === "function") {
+                    return callback({ status: 401, message: "Unauthorized: user id missing" });
+                }
+                socket?.emit("error", { message: "Unauthorized: user id missing" });
+                return;
+            }
+
+            const imageUrl = data.imageUrl || data.image_url || data.avatar || null;
+            const publicId = data.publicId || data.public_id || null;
+
+            const updatedProfile = await UserModel.findByIdAndUpdate(
+                id,
+                { $set: { imageUrl, avatar: imageUrl, publicId } },
+                { returnDocument: "before" }
+            ).select('publicId');
+
+            if (!updatedProfile) {
+                if (typeof callback === "function") {
+                    return callback({ status: 404, message: "user not found" });
+                }
+                socket?.emit("error", { message: "user not found" });
+                return;
+            }
+
+            // delete the previous image from cloudinary using its public id if it exists
+            if (updatedProfile.publicId && updatedProfile.publicId !== publicId) {
+                try {
+                    await deleteImageFn(updatedProfile.publicId);
+                } catch (delErr) {
+                    console.error("Cloudinary previous avatar deletion failed (socket):", delErr);
+                }
+            }
+
+            const result = { imageUrl, avatar: imageUrl };
+
+            if (typeof callback === "function") {
+                callback({ status: 200, data: result });
+            }
+            socket?.emit("avatar_updated", result);
+            return result;
+        } catch (err) {
+            console.error("Failed to update profile avatar (socket):", err);
+            err.message = "Failed updateProfileAvatar";
+            if (typeof callback === "function") {
+                callback({ status: 500, message: "Failed updateProfileAvatar", error: err.message });
+            }
+            socket?.emit("error", { message: "Failed updateProfileAvatar", error: err.message });
+        }
+    };
+};
+
+// Aliases matching handle* convention
+const handleProfileDetails = profileDetailsSocket;
+const handleUpdateProfileDetails = updateProfileDetailsSocket;
+const handleUpdateProfileAvatar = updateProfileAvatarSocket;
+const handleGetProfile = profileDetailsSocket;
+const handleProfileUpdate = updateProfileDetailsSocket;
+const handleAvatarUpdate = updateProfileAvatarSocket;
+
+export {
+    profileDetailsSocket,
+    updateProfileDetailsSocket,
+    updateProfileAvatarSocket,
+    handleProfileDetails,
+    handleUpdateProfileDetails,
+    handleUpdateProfileAvatar,
+    handleGetProfile,
+    handleProfileUpdate,
+    handleAvatarUpdate,
+};

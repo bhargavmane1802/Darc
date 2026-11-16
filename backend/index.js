@@ -17,7 +17,7 @@ import cors from "cors";
 import { profileRoutes } from "./src/routers/profile.Router.js"
 const app = express();
 const server = http.createServer(app);
-initSocket(server);
+const io = initSocket(server);
 const port =process.env.PORT|| 8080;
 const main = async () => {
     try {
@@ -79,18 +79,19 @@ app.use(
 server.listen(port, () => {
     console.log(`${port}`);
 })
-app.use("/user", userRoutes);
-app.use("/auth/", validate_auth());
-app.use("/auth/profile",profileRoutes);
-app.use("/auth/room", roomRoutes);
-app.use("/auth/journal", journalRoutes);
-app.use("/auth/message", messageRoutes);
-app.use("/auth/upload", uploadRouter);
-app.get("/test", async(req, res) => {
-    //just for testing porpose
-    testStartDigestJob();
-    return res.send("started a cron job that will work in every 1 min");
-})
+// HTTP Routes (commented out - all communication now handled via Socket.IO)
+// app.use("/user", userRoutes);
+// app.use("/auth/", validate_auth());
+// app.use("/auth/profile",profileRoutes);
+// app.use("/auth/room", roomRoutes);
+// app.use("/auth/journal", journalRoutes);
+// app.use("/auth/message", messageRoutes);
+// app.use("/auth/upload", uploadRouter);
+// app.get("/test", async(req, res) => {
+//     //just for testing porpose
+//     testStartDigestJob();
+//     return res.send("started a cron job that will work in every 1 min");
+// })
 app.use((err, req, res, next) => {
   console.log(err,err.message);
   res.status(err.status || 500).json({
@@ -98,3 +99,5 @@ app.use((err, req, res, next) => {
     });
 
 })
+
+export { app, server, io };

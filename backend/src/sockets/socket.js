@@ -6,18 +6,45 @@ import room_Model from "../model/room.model.js";
 import redis from "../config/redis.js";
 import readReceipt_Model from "../model/readReceipt.model.js";
 
+// Socket.IO Router Registrars mirroring Express HTTP Routers
+import { registerUserSocketRoutes } from "../routers/user.Router.js";
+import { registerProfileSocketRoutes } from "../routers/profile.Router.js";
+import { registerRoomSocketRoutes } from "../routers/room.Router.js";
+import { registerJournalSocketRoutes } from "../routers/journal.Router.js";
+import { registerMessageSocketRoutes } from "../routers/message.Router.js";
+import { registerUploadSocketRoutes } from "../routers/upload.routes.js";
+
 let io;
 
-// ---------------------------------------------------------------------------
-// Auth middleware
-// ---------------------------------------------------------------------------
-
+/**
+ * Connection-level authentication middleware (equivalent to handshake auth).
+ * Extracts JWT token from handshake auth, authorization header, or query.
+ * Verifies token and attaches user to socket.user.
+ * If no token is provided, allows connection for public routes (login/register).
+ */
 export const socketAuthMiddleware = (jwtLib = jwt) => (socket, next) => {
     try {
-        const token = socket.handshake.auth.token;
-        if (!token) return next(new Error("Unauthorised: No token provided"));
-        const user = jwtLib.verify(token, process.env.Jwt_Key);
-        socket.user = user;
+        const authHeader = socket.handshake?.headers?.authorization;
+        const authToken = socket.handshake?.auth?.token;
+        const queryToken = socket.handshake?.query?.token;
+
+        let token = null;
+        if (authToken) {
+            token = authToken.startsWith("Bearer ") ? authToken.split(" ")[1] : authToken;
+        } else if (authHeader && authHeader.startsWith("Bearer ")) {
+            token = authHeader.split(" ")[1];
+        } else if (queryToken) {
+            token = queryToken.startsWith("Bearer ") ? queryToken.split(" ")[1] : queryToken;
+        }
+
+        if (token) {
+            const user = jwtLib.verify(token, process.env.Jwt_Key);
+            socket.user = user;
+            return next();
+        }
+
+        // Allow connection without token so public user routes (login, register, verify) can proceed.
+        // Protected routes are gated by requireSocketAuth.
         return next();
     } catch (err) {
         console.error("Socket Auth Error:", err.message);
@@ -25,9 +52,40 @@ export const socketAuthMiddleware = (jwtLib = jwt) => (socket, next) => {
     }
 };
 
-// ---------------------------------------------------------------------------
-// Event handlers (DI factories)
-// ---------------------------------------------------------------------------
+/**
+ * Public socket events accessible without authentication.
+ * Mirrors unauthenticated Express routes: app.use("/user", userRoutes)
+ */
+export const PUBLIC_SOCKET_EVENTS = new Set([
+    // User routes
+    "user:login", "login", "user_login",
+    "user:register", "register", "user_register",
+    "user:verify", "user:verify_email", "verify_email", "user_verify",
+    // Connection / System events
+    "disconnecting", "disconnect", "error"
+]);
+
+/**
+ * Packet-level authentication guard mirroring Express middleware:
+ * app.use("/auth/", validate_auth())
+ * Enforces valid socket.user for all non-public events.
+ */
+export const requireSocketAuth = (socket) => {
+    socket.use(([event, data, callback], next) => {
+        if (PUBLIC_SOCKET_EVENTS.has(event)) {
+            return next();
+        }
+
+        if (!socket.user) {
+            const errPayload = { status: 401, message: "unauthorized user" };
+            if (typeof callback === "function") callback(errPayload);
+            socket.emit("error", errPayload);
+            return next(new Error("unauthorized user"));
+        }
+
+        next();
+    });
+};
 
 export const handleJoinRoom = ({ MessageModel = message_Model, redisClient = redis } = {}) =>
     async ({ room_id }, socket, io) => {
@@ -201,27 +259,52 @@ export const handleDisconnecting = ({ redisClient = redis } = {}) =>
         }
     };
 
-// ---------------------------------------------------------------------------
-// initSocket
-// ---------------------------------------------------------------------------
-
+/**
+ * Initializes Socket.IO with all middleware and routes matching Express HTTP flow.
+ * Request / Route Flow:
+ *   1. Connection Auth (handshake token verification)
+ *   2. Public Routes: registerUserSocketRoutes (mirroring app.use("/user", userRoutes))
+ *   3. Auth Guard: requireSocketAuth (mirroring app.use("/auth/", validate_auth()))
+ *   4. Protected Routes:
+ *      - registerProfileSocketRoutes (mirroring app.use("/auth/profile", profileRoutes))
+ *      - registerRoomSocketRoutes (mirroring app.use("/auth/room", roomRoutes))
+ *      - registerJournalSocketRoutes (mirroring app.use("/auth/journal", journalRoutes))
+ *      - registerMessageSocketRoutes (mirroring app.use("/auth/message", messageRoutes))
+ *      - registerUploadSocketRoutes (mirroring app.use("/auth/upload", uploadRouter))
+ *   5. Core Real-time Room & Messaging handlers
+ */
 export const initSocket = (server) => {
     io = new Server(server, { cors: { origin: process.env.FRONTEND_URL || "*", methods: ["GET", "POST"] } });
+
+    // Step 1: Handshake Authentication Middleware
     io.use(socketAuthMiddleware());
+
     io.on("connection", (socket) => {
         console.log("User connected:", socket.id);
-        const user = socket.user;
 
+        // Step 2: Public User Routes (/user equivalent: login, register, verify)
+        registerUserSocketRoutes(socket, io);
+
+        // Step 3: Auth Protection Guard (/auth/ equivalent: validate_auth)
+        requireSocketAuth(socket);
+
+        // Step 4: Protected Routers (/auth/* equivalents)
+        registerProfileSocketRoutes(socket, io);
+        registerRoomSocketRoutes(socket, io);
+        registerJournalSocketRoutes(socket, io);
+        registerMessageSocketRoutes(socket, io);
+        registerUploadSocketRoutes(socket, io);
+
+        // Step 5: Real-time room presence and messaging events
         socket.on("join_room", (data) => handleJoinRoom()(data, socket, io));
         socket.on("switch_room", (room_id) => handleSwitchRoom()(room_id, socket, io));
         socket.on("leave_room", (room_id) => handleLeaveRoom()(room_id, socket, io));
-        socket.on("message_send", (data) => handleMessageSend()(data, socket, io));
         socket.on("typing_start", (data) => handleTypingStart()(data, socket));
         socket.on("typing_end", (data) => handleTypingEnd()(data, socket));
-        socket.on("read_message", (room_id, message_id) => handleReadMessage()(room_id, message_id, socket));
         socket.on("disconnecting", () => handleDisconnecting()(socket, io));
         socket.on("disconnect", () => console.log("User disconnected:", socket.id));
     });
+
     return io;
 };
 

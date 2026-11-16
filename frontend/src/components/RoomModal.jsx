@@ -8,7 +8,6 @@ export default function RoomModal({ mode, onClose, onRoomCreated, onRoomJoined }
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { addToast } = useToast();
-  const socket=getSocket();
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!name.trim()) return addToast('Room name is required', 'error');
@@ -36,7 +35,8 @@ export default function RoomModal({ mode, onClose, onRoomCreated, onRoomJoined }
         description: data.description || '',
         inviteCode:inviteCode,
       });
-      socket.emit('room_join',{room_id:data.room_id});
+      const currentSocket = getSocket();
+      currentSocket?.emit('join_room', { room_id: data.room_id });
       
     } catch (err) {
       addToast(err.message || 'Failed to join room', 'error');
