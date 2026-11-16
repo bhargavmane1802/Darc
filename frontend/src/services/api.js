@@ -1,225 +1,324 @@
-const BASE = import.meta.env.VITE_API_URL ||'/api';
+import { socketRequest, connectSocket, updateSocketAuth } from './socket.js';
 
-async function request(path, options = {}) {
-  const token = localStorage.getItem('darc_token');
-  const isFormData = options.body instanceof FormData;
-  const headers = { ...options.headers };
-
-  if (!isFormData && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
-
-  // 204 No Content — return empty success
-  if (res.status === 204) return {};
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const msg = data?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-  return data;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Socket.IO based API Services replacing previous HTTP REST endpoints
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Auth
 export const apiRegister = (username, password, email) =>
-  request('/user/register', { method: 'POST', body: JSON.stringify({ username, password, email }) });
+  socketRequest('user:register', { username, password, email });
 
-export const apiLogin = (username, password) =>
-  request('/user/login', { method: 'POST', body: JSON.stringify({ username, password }) });
-
-export const apiGetUser = () => request('/auth/');
+export const apiLogin = async (username, password) => {
+  const res = await socketRequest('user:login', { username, password });
+  if (res?.token) {
+    updateSocketAuth(res.token);
+  }
+  return res;
+};
 
 // Profile
-export const apiGetProfile = () => request('/auth/profile/user');
+export const apiGetProfile = async () => {
+  const res = await socketRequest('profile:details', {});
+  return res?.data !== undefined ? res.data : res;
+};
 
-export const apiUpdateProfile = ({ name, about, status }) =>
-  request('/auth/profile/user', {
-    method: 'PATCH',
-    body: JSON.stringify({ name, about, status }),
-  });
+export const apiGetUser = apiGetProfile;
+
+export const apiUpdateProfile = async ({ name, about, status }) => {
+  const res = await socketRequest('profile:update', { name, about, status });
+  return res?.data !== undefined ? res.data : res;
+};
+
+// Upload
+export async function apiUploadImage(file) {
+  let rawFile = file;
+  if (typeof FormData !== 'undefined' && file instanceof FormData) {
+    rawFile = file.get('image') || file.get('file');
+  }
+
+  let imagePayload = rawFile;
+  if (typeof window !== 'undefined' && (rawFile instanceof File || rawFile instanceof Blob)) {
+    imagePayload = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(rawFile);
+    });
+  }
+
+  const res = await socketRequest('upload:image', { image: imagePayload });
+  return res?.data !== undefined ? res.data : res;
+}
 
 export const apiUpdateProfileAvatar = async (file) => {
-  const formData = new FormData();
-  formData.append('image', file);
-  return request('/auth/profile/user/avatar', {
-    method: 'PATCH',
-    body: formData,
-  });
+  let imageUrl = null;
+  let publicId = null;
+
+  if (
+    typeof window !== 'undefined' &&
+    (file instanceof File || file instanceof Blob || (typeof FormData !== 'undefined' && file instanceof FormData))
+  ) {
+    const uploadRes = await apiUploadImage(file);
+    imageUrl = uploadRes?.imageUrl;
+    publicId = uploadRes?.publicId;
+  } else if (file && typeof file === 'object') {
+    imageUrl = file.imageUrl || file.url || file.image || null;
+    publicId = file.publicId || null;
+  } else if (typeof file === 'string') {
+    imageUrl = file;
+  }
+
+  const res = await socketRequest('profile:avatar', { imageUrl, publicId });
+  return res?.data !== undefined ? res.data : res;
 };
 
 // Rooms
-export const apiCreateRoom = (name, description) =>
-  request('/auth/room/create', { method: 'POST', body: JSON.stringify({ name, description }) });
+export const apiCreateRoom = async (name, description) => {
+  const res = await socketRequest('room:create', { name, description });
+  return res?.data !== undefined ? res.data : res;
+};
 
-export const apiJoinRoom = (inviteCode) => request(`/auth/room/join/${inviteCode}`);
+export const apiJoinRoom = async (inviteCode) => {
+  const res = await socketRequest('room:join', { inviteCode });
+  return res?.data !== undefined ? res.data : res;
+};
 
-export const apiDeleteRoom = (name) =>
-  request(`/auth/room/remove/${name}`, { method: 'DELETE' });
+export const apiDeleteRoom = async (name) => {
+  const res = await socketRequest('room:remove', { name });
+  return res?.data !== undefined ? res.data : res;
+};
 
-export const apiGetMyRooms = () => request('/auth/room/my-rooms');
+export const apiGetMyRooms = async () => {
+  const res = await socketRequest('room:my_rooms', {});
+  return res?.data !== undefined ? res.data : res;
+};
 
-// Messages (REST) — paths match backend: /:roomId/create, /:roomId/display, /:roomId/update/:messageId, /:roomId/delete/:messageId
-export const apiGetMessages = (roomId) => request(`/auth/message/${roomId}/display`);
+// Messages
+export const apiGetMessages = async (roomId) => {
+  const res = await socketRequest('message:display', { roomId, room_id: roomId });
+  if (res?.data !== undefined) return res.data;
+  if (Array.isArray(res?.message)) return res.message;
+  return res;
+};
 
-export const apiSendMessage = (roomId, contentOrData, maybeImage) => {
-  if (contentOrData instanceof FormData) {
-    return request(`/auth/message/${roomId}/create`, { method: 'POST', body: contentOrData });
-  }
+export const apiSendMessage = async (roomId, contentOrData, maybeImage) => {
+  let content = '';
+  let imageFile = null;
 
-  let content = contentOrData;
-  let imageFile = maybeImage;
-
-  if (contentOrData && typeof contentOrData === 'object' && !(contentOrData instanceof File)) {
-    content = contentOrData.content;
+  if (typeof FormData !== 'undefined' && contentOrData instanceof FormData) {
+    content = contentOrData.get('content') || '';
+    imageFile = contentOrData.get('image') || contentOrData.get('file');
+  } else if (contentOrData && typeof contentOrData === 'object' && !(contentOrData instanceof File)) {
+    content = contentOrData.content || '';
     imageFile = contentOrData.image || contentOrData.file || maybeImage;
+  } else {
+    content = typeof contentOrData === 'string' ? contentOrData : '';
+    imageFile = maybeImage;
   }
+
+  let imageUrl = null;
+  let publicId = null;
 
   if (imageFile) {
-    const formData = new FormData();
-    if (content && typeof content === 'string' && content.trim()) {
-      formData.append('content', content.trim());
-    }
-    formData.append('image', imageFile);
-    return request(`/auth/message/${roomId}/create`, { method: 'POST', body: formData });
+    const uploadRes = await apiUploadImage(imageFile);
+    imageUrl = uploadRes?.imageUrl || null;
+    publicId = uploadRes?.publicId || null;
   }
 
-  return request(`/auth/message/${roomId}/create`, {
-    method: 'POST',
-    body: JSON.stringify({ content: (typeof content === 'string' ? content.trim() : content) || '' }),
+  const text = typeof content === 'string' ? content.trim() : '';
+
+  const res = await socketRequest('message:send', {
+    roomId,
+    room_id: roomId,
+    content: text,
+    imageUrl,
+    publicId,
   });
+
+  return res;
 };
 
 export const apiUpdateMessage = (roomId, messageId, content) =>
-  request(`/auth/message/${roomId}/update/${messageId}`, { method: 'PUT', body: JSON.stringify({ content }) });
+  socketRequest('message:update', {
+    roomId,
+    room_id: roomId,
+    messageId,
+    content: typeof content === 'string' ? content.trim() : content,
+  });
 
 export const apiDeleteMessage = (roomId, messageId) =>
-  request(`/auth/message/${roomId}/delete/${messageId}`, { method: 'DELETE' });
+  socketRequest('message:delete', {
+    roomId,
+    room_id: roomId,
+    messageId,
+  });
 
-// Journal — paths match backend: /:roomId/create, /:roomId/display, /:roomId/delete/:journalId
-export const apiGetJournals = (roomId) => request(`/auth/journal/${roomId}/display`);
+// Journals
+export const apiGetJournals = async (roomId) => {
+  const res = await socketRequest('journal:display', { roomId, room_id: roomId });
+  return res?.data !== undefined ? res.data : res;
+};
 
-export const apiCreateJournal = (roomId, contentOrData, maybeImage) => {
-  if (contentOrData instanceof FormData) {
-    return request(`/auth/journal/${roomId}/create`, { method: 'POST', body: contentOrData });
-  }
+export const apiCreateJournal = async (roomId, contentOrData, maybeImage) => {
+  let content = '';
+  let imageFile = null;
 
-  let content = contentOrData;
-  let imageFile = maybeImage;
-
-  if (contentOrData && typeof contentOrData === 'object' && !(contentOrData instanceof File)) {
-    content = contentOrData.content;
+  if (typeof FormData !== 'undefined' && contentOrData instanceof FormData) {
+    content = contentOrData.get('content') || '';
+    imageFile = contentOrData.get('image') || contentOrData.get('file');
+  } else if (contentOrData && typeof contentOrData === 'object' && !(contentOrData instanceof File)) {
+    content = contentOrData.content || '';
     imageFile = contentOrData.image || contentOrData.file || maybeImage;
+  } else {
+    content = typeof contentOrData === 'string' ? contentOrData : '';
+    imageFile = maybeImage;
   }
+
+  let imageUrl = null;
+  let publicId = null;
 
   if (imageFile) {
-    const formData = new FormData();
-    if (content && typeof content === 'string' && content.trim()) {
-      formData.append('content', content.trim());
-    }
-    formData.append('image', imageFile);
-    return request(`/auth/journal/${roomId}/create`, { method: 'POST', body: formData });
+    const uploadRes = await apiUploadImage(imageFile);
+    imageUrl = uploadRes?.imageUrl || null;
+    publicId = uploadRes?.publicId || null;
   }
 
-  return request(`/auth/journal/${roomId}/create`, {
-    method: 'POST',
-    body: JSON.stringify({ content: (typeof content === 'string' ? content.trim() : content) || '' }),
+  const text = typeof content === 'string' ? content.trim() : '';
+
+  const res = await socketRequest('journal:create', {
+    roomId,
+    room_id: roomId,
+    content: text,
+    imageUrl,
+    publicId,
   });
+
+  return res?.data !== undefined ? res.data : res;
 };
 
 export const apiDeleteJournal = (roomId, journalId) =>
-  request(`/auth/journal/${roomId}/delete/${journalId}`, { method: 'DELETE' });
-
-// Journal Reactions — PATCH /:roomId/reaction/:journalId
-export const apiToggleReaction = (roomId, journalId, emoji) =>
-  request(`/auth/journal/${roomId}/reaction/${journalId}`, { method: 'PATCH', body: JSON.stringify({ emoji }) });
-
-// Image Upload — POST /auth/upload (multipart/form-data, no Content-Type header)
-export async function apiUploadImage(file) {
-  const formData = new FormData();
-  formData.append('image', file);
-  return request('/auth/upload', {
-    method: 'POST',
-    body: formData,
+  socketRequest('journal:delete', {
+    roomId,
+    room_id: roomId,
+    journalId,
   });
-}
 
-// AI Feedback (SSE) — path: /:roomId/aiResponce/:journalId
-// Returns remaining AI credits via onRemainingCredits callback
+// Journal Reactions
+export const apiToggleReaction = async (roomId, journalId, emoji) => {
+  const res = await socketRequest('journal:reaction', {
+    roomId,
+    room_id: roomId,
+    journalId,
+    emoji,
+  });
+  return res?.data !== undefined ? res.data : res;
+};
+
+// AI Feedback (Socket.IO stream)
 export function streamAIFeedback(roomId, journalId, onToken, onDone, onError, onRemainingCredits) {
-  const token = localStorage.getItem('darc_token');
-  const url = `${BASE}/auth/journal/${roomId}/aiResponse/${journalId}`;
+  const socket = connectSocket();
+  if (!socket) {
+    onError?.('Socket connection not available');
+    return () => {};
+  }
 
-  // 1. Create a controller to handle timeouts
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s client-side timeout
+  let finished = false;
 
-  fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` },
-    signal: controller.signal // Link the abort signal to the fetch
-  })
-    .then(async (res) => {
-      clearTimeout(timeoutId); // Request started, clear the connection timeout
+  const handleAiResponse = (payload) => {
+    if (payload?.journalId && String(payload.journalId) !== String(journalId)) return;
 
-      // Read rate limit header before checking response status
-      const remaining = res.headers.get('X-RateLimit-Remaining');
-      if (remaining !== null) {
-        onRemainingCredits?.(parseInt(remaining, 10));
+    if (payload?.error) {
+      if (!finished) {
+        finished = true;
+        cleanup();
+        onError?.(payload.error);
       }
+      return;
+    }
 
-      if (res.status === 429) {
-        const data = await res.json().catch(() => null);
-        onError?.(data?.message || 'Daily AI feedback limit reached. Try again tomorrow!');
-        return;
+    if (payload?.token === '[DONE]') {
+      if (!finished) {
+        finished = true;
+        cleanup();
+        onDone?.();
       }
+      return;
+    }
 
-      if (!res.ok) throw new Error('AI request failed (Server Error)');
-      
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+    if (payload?.token) {
+      onToken?.(payload.token);
+    }
+  };
 
-      async function read() {
-        try {
-          const { done, value } = await reader.read();
-          
-          if (done) {
-            onDone?.();
-            return;
-          }
+  const handleAiDone = (payload) => {
+    if (payload?.journalId && String(payload.journalId) !== String(journalId)) return;
+    if (!finished) {
+      finished = true;
+      cleanup();
+      onDone?.();
+    }
+  };
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop();
+  const handleRateLimit = (payload) => {
+    if (payload?.remaining !== undefined) {
+      onRemainingCredits?.(payload.remaining);
+    }
+  };
 
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const content = line.slice(6).trim();
-              if (content === '[DONE]') {
-                onDone?.();
-                return;
-              }
-              const data = JSON.parse(content);
-              if (data.error) throw new Error(data.error);
-              onToken?.(data.token);
-            }
-          }
-          read(); // Recursive call for next chunk
-        } catch (readError) {
-          // 2. Handle stream interruption (SSE connection drop)
-          console.error("Stream interrupted:", readError);
-          onError?.("AI response interrupted — please try again.");
+  const handleError = (err) => {
+    if (err?.message?.includes('limit reached') || err?.status === 429) {
+      onRemainingCredits?.(0);
+      if (!finished) {
+        finished = true;
+        cleanup();
+        onError?.(err.message || 'Daily AI feedback limit reached. Try again tomorrow!');
+      }
+    }
+  };
+
+  const timeoutId = setTimeout(() => {
+    if (!finished) {
+      finished = true;
+      cleanup();
+      onError?.('Request timed out. The AI took too long to respond.');
+    }
+  }, 45000);
+
+  const cleanup = () => {
+    clearTimeout(timeoutId);
+    socket.off('ai_response', handleAiResponse);
+    socket.off('ai_response_done', handleAiDone);
+    socket.off('rate_limit_status', handleRateLimit);
+    socket.off('error', handleError);
+  };
+
+  socket.on('ai_response', handleAiResponse);
+  socket.on('ai_response_done', handleAiDone);
+  socket.on('rate_limit_status', handleRateLimit);
+  socket.on('error', handleError);
+
+  socket.emit(
+    'journal:ai_response',
+    { roomId, room_id: roomId, journalId, entryId: journalId },
+    (res) => {
+      if (res?.status === 429) {
+        if (!finished) {
+          finished = true;
+          cleanup();
+          onRemainingCredits?.(0);
+          onError?.(res.message || 'Daily AI feedback limit reached. Try again tomorrow!');
         }
+      } else if (res?.status && res.status >= 400) {
+        if (!finished) {
+          finished = true;
+          cleanup();
+          onError?.(res.message || res.error || 'AI feedback failed');
+        }
+      } else if (res?.remaining !== undefined) {
+        onRemainingCredits?.(res.remaining);
       }
-      read();
-    })
-    .catch((err) => {
-      if (err.name === 'AbortError') {
-        onError?.("Request timed out. The AI took too long to respond.");
-      } else {
-        onError?.(err.message || 'Stream connection failed');
-      }
-    });
+    }
+  );
+
+  return cleanup;
 }
