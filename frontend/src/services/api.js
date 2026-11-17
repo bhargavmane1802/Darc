@@ -94,10 +94,18 @@ export const apiGetMyRooms = async () => {
 };
 
 // Messages
-export const apiGetMessages = async (roomId) => {
-  const res = await socketRequest('message:display', { roomId, room_id: roomId });
-  if (res?.data !== undefined) return res.data;
-  if (Array.isArray(res?.message)) return res.message;
+export const apiGetMessages = async (roomId, before = null, limit = 30) => {
+  const payload = {
+    roomId,
+    room_id: roomId,
+    limit,
+  };
+  if (before) {
+    payload.before = before;
+    payload.offset = before;
+    payload.lastMessageId = before;
+  }
+  const res = await socketRequest('message:display', payload);
   return res;
 };
 

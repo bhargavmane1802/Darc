@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { getSocket } from '../services/socket.js';
-import { apiDeleteMessage, apiUpdateMessage, apiSendMessage } from '../services/api.js';
+import { apiDeleteMessage, apiUpdateMessage, apiSendMessage, apiGetMessages } from '../services/api.js';
 import Avatar from './Avatar.jsx';
 
 export default function ChatPanel({ roomId, user }) {
   const [messages, setMessages] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [input, setInput] = useState('');
   const [typingUsers, setTypingUsers] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -13,19 +15,126 @@ export default function ChatPanel({ roomId, user }) {
   const [imagePreview, setImagePreview] = useState(null); // { file, url }
   const [uploading, setUploading] = useState(false);
   const endRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const typingTimeout = useRef(null);
   const fileInputRef = useRef(null);
+  const scrollPositionRef = useRef(null);
+
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(false);
+  const messagesRef = useRef(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  useEffect(() => {
+    loadingMoreRef.current = loadingMore;
+  }, [loadingMore]);
 
   const scrollToBottom = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Preserve scroll position when older messages are prepended
+  useLayoutEffect(() => {
+    if (scrollPositionRef.current && messagesContainerRef.current) {
+      const { prevScrollHeight, prevScrollTop } = scrollPositionRef.current;
+      const currentScrollHeight = messagesContainerRef.current.scrollHeight;
+      messagesContainerRef.current.scrollTop = currentScrollHeight - prevScrollHeight + prevScrollTop;
+      scrollPositionRef.current = null;
+    }
+  }, [messages]);
+
+  const loadPreviousMessages = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMoreRef.current || messagesRef.current.length === 0) {
+      return;
+    }
+
+    const oldestMessage = messagesRef.current[0];
+    if (!oldestMessage?._id) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    const container = messagesContainerRef.current;
+    if (container) {
+      scrollPositionRef.current = {
+        prevScrollHeight: container.scrollHeight,
+        prevScrollTop: container.scrollTop,
+      };
+    }
+
+    try {
+      const res = await apiGetMessages(roomId, oldestMessage._id, 30);
+      const olderMessages = res?.messages || res?.message || (Array.isArray(res) ? res : []);
+      const more = res?.hasMore !== undefined ? Boolean(res.hasMore) : olderMessages.length >= 30;
+
+      hasMoreRef.current = more;
+      setHasMore(more);
+
+      if (olderMessages.length > 0) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m._id));
+          const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m._id));
+          return [...uniqueOlder, ...prev];
+        });
+      } else {
+        hasMoreRef.current = false;
+        setHasMore(false);
+        scrollPositionRef.current = null;
+      }
+    } catch (err) {
+      console.error('Failed to load previous messages:', err);
+      scrollPositionRef.current = null;
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [roomId]);
+
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // When scrolled near the top and previous messages exist, fetch more
+    if (container.scrollTop <= 40 && hasMoreRef.current && !loadingMoreRef.current) {
+      loadPreviousMessages();
+    }
+  };
+
   useEffect(() => {
+    setMessages([]);
+    setHasMore(false);
+    hasMoreRef.current = false;
+    setLoadingMore(false);
+    loadingMoreRef.current = false;
+    scrollPositionRef.current = null;
+
     const socket = getSocket();
     if (!socket) return;
 
-    const onDisplay = (msgs) => {
+    const onDisplay = (payload) => {
+      let msgs = [];
+      let more = false;
+
+      if (Array.isArray(payload)) {
+        msgs = payload;
+        more = payload.length >= 30;
+      } else if (payload && typeof payload === 'object') {
+        msgs = payload.messages || payload.message || [];
+        more = Boolean(payload.hasMore);
+      }
+
+      scrollPositionRef.current = null;
       setMessages(msgs);
+      setHasMore(more);
+      hasMoreRef.current = more;
+
       setTimeout(() => {
         scrollToBottom();
         // Mark last message as read
@@ -40,7 +149,15 @@ export default function ChatPanel({ roomId, user }) {
         return [...prev, msg];
       });
       setTimeout(() => {
-        scrollToBottom();
+        const container = messagesContainerRef.current;
+        const isNearBottom = container
+          ? container.scrollHeight - container.scrollTop - container.clientHeight < 150
+          : true;
+        const isOwn = msg.sender?.username === user?.username || msg.sender?._id === user?.id;
+
+        if (isNearBottom || isOwn) {
+          scrollToBottom();
+        }
         emitRead(msg._id);
       }, 100);
     };
@@ -212,7 +329,24 @@ export default function ChatPanel({ roomId, user }) {
 
   return (
     <div className="chat-panel">
-      <div className="chat-panel__messages">
+      <div
+        ref={messagesContainerRef}
+        className="chat-panel__messages"
+        onScroll={handleScroll}
+      >
+        {loadingMore && (
+          <div className="chat-panel__loading-more">
+            <span className="spinner spinner--sm" />
+            <span>Loading older messages…</span>
+          </div>
+        )}
+
+        {!hasMore && messages.length > 0 && (
+          <div className="chat-panel__history-start">
+            <span>Beginning of conversation history</span>
+          </div>
+        )}
+
         {messages.map((msg) => {
           const isOwn = msg.sender?.username === user?.username || msg.sender?._id === user?.id;
           const readCount = isOwn ? getReadCount(msg._id) : 0;

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import message_Model from "../model/message.model.js";
 import {getIO} from "../sockets/socket.js"
 
@@ -92,8 +93,38 @@ const messageDisplay = (MessageModel = message_Model) =>
     async (req,res,next)=>{
     try{
         const {roomId}=req.params;
-        const message=await MessageModel.find({room:roomId}).populate("sender","username imageUrl avatar");
-        return res.status(200).json({message});
+        const { before, offset, lastMessageId, beforeMessageId, limit: reqLimit } = req.query;
+        const limit = Math.min(Math.max(parseInt(reqLimit || 30, 10), 1), 100);
+        const cursor = before || offset || lastMessageId || beforeMessageId;
+
+        const query = { room: roomId };
+        if (cursor) {
+            if (mongoose.Types.ObjectId.isValid(cursor)) {
+                const pivot = await MessageModel.findById(cursor).select("createdAt");
+                if (pivot) {
+                    query.$or = [
+                        { createdAt: { $lt: pivot.createdAt } },
+                        { createdAt: pivot.createdAt, _id: { $lt: pivot._id } }
+                    ];
+                } else {
+                    query._id = { $lt: cursor };
+                }
+            } else if (!isNaN(Date.parse(cursor))) {
+                query.createdAt = { $lt: new Date(cursor) };
+            }
+        }
+
+        const fetched = await MessageModel.find(query)
+            .sort({ createdAt: -1, _id: -1 })
+            .limit(limit + 1)
+            .populate("sender", "username imageUrl avatar")
+            .lean();
+
+        const hasMore = fetched.length > limit;
+        const rawMessages = hasMore ? fetched.slice(0, limit) : fetched;
+        const message = rawMessages.reverse();
+
+        return res.status(200).json({ message, messages: message, hasMore });
     }
     catch(err){
         console.log("failed to display message");
@@ -354,24 +385,106 @@ const messageDisplaySocket = (...args) => {
 
     return async (data, socket, io, callback) => {
         try {
-            const roomId = typeof data === "string" ? data : (data?.roomId || data?.room_id || data?.room);
+                        
+            const roomId = typeof data === "string"
+                ? data
+                : (data?.roomId || data?.room_id || data?.room);
+
+            const cursor = typeof data === "object"
+                ? (data?.before || data?.offset || data?.lastMessageId || data?.beforeMessageId)
+                : null;
+
+            const limit = typeof data === "object"
+                ? Math.min(Math.max(parseInt(data?.limit || 30, 10), 1), 100)
+                : 30;
 
             if (!roomId) {
                 if (typeof callback === "function") {
                     return callback({ status: 400, message: "roomId is required" });
                 }
+
                 socket?.emit("error", { message: "roomId is required" });
                 return;
             }
 
-            const message = await MessageModel.find({ room: roomId })
-                .populate("sender", "username imageUrl avatar");
+            const query = { room: new mongoose.Types.ObjectId(roomId) };
 
-            socket?.emit("message_display", message);
-            if (typeof callback === "function") {
-                callback({ status: 200, message });
+            if (cursor) {
+                if (mongoose.Types.ObjectId.isValid(cursor)) {
+                    query.$expr = {
+                        $let: {
+                            vars: {
+                                pivot: {
+                                    $first: {
+                                        $filter: {
+                                            input: "$_pivot",
+                                            as: "p",
+                                            cond: { $eq: ["$$p._id", new mongoose.Types.ObjectId(cursor)] }
+                                        }
+                                    }
+                                }
+                            },
+                            in: {
+                                $cond: [
+                                    { $ne: ["$$pivot", null] },
+                                    {
+                                        $or: [
+                                            { $lt: ["$createdAt", "$$pivot.createdAt"] },
+                                            {
+                                                $and: [
+                                                    { $eq: ["$createdAt", "$$pivot.createdAt"] },
+                                                    { $lt: ["$_id", "$$pivot._id"] }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    { $lt: ["$_id", new mongoose.Types.ObjectId(cursor)] }
+                                ]
+                            }
+                        }
+                    };
+                } else if (!isNaN(Date.parse(cursor))) {
+                    query.createdAt = { $lt: new Date(cursor) };
+                }
             }
-            return message;
+
+            const fetched = await MessageModel.aggregate([
+                {
+                    $match: { room: new mongoose.Types.ObjectId(roomId) }
+                },
+                {
+                    $facet: {
+                        pivot: cursor && mongoose.Types.ObjectId.isValid(cursor)
+                            ? [
+                                {
+                                    $match: {
+                                        _id: new mongoose.Types.ObjectId(cursor)
+                                    }
+                                },
+                                { $project: { createdAt: 1 } },
+                                { $limit: 1 }
+                            ]
+                            : [{ $limit: 0 }],
+                        messages: [
+                            {
+                                $sort: { createdAt: -1, _id: -1 }
+                            },
+                            { $limit: 1000 }
+                        ]
+                    }
+                }
+            ]);
+
+            const hasMore = fetched.length > limit;
+            const rawMessages = hasMore ? fetched.slice(0, limit) : fetched;
+            const message = rawMessages.reverse();
+
+            if (typeof callback === "function") {
+                callback({ status: 200, message, messages: message, hasMore });
+            } else {
+                socket?.emit("message_display", { messages: message, message, hasMore, roomId });
+            }
+            return { message, messages: message, hasMore };
         } catch (err) {
             console.log("failed to display message (socket):", err);
             err.message = "failed messageDisplay";

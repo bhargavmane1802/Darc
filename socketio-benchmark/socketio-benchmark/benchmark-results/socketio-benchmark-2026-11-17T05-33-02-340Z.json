@@ -1,0 +1,584 @@
+{
+  "target": "http://localhost:8080",
+  "stages": [
+    5,
+    20,
+    50,
+    100,
+    250
+  ],
+  "stageDurationMs": 60000,
+  "messageIntervalMs": 2000,
+  "results": [
+    {
+      "scenario": "shared-room",
+      "stage": 1,
+      "concurrentUsers": 5,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 0,
+        "connectFailure": 0,
+        "loginSuccess": 0,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 145,
+        "messageAckFailure": 0,
+        "messageDeliveries": 725
+      },
+      "connectionLatencyMs": {
+        "count": 5,
+        "min": 3.06,
+        "avg": 5.72,
+        "p50": 4.1,
+        "p90": 13.5,
+        "p95": 13.5,
+        "p99": 13.5,
+        "max": 13.5
+      },
+      "loginLatencyMs": {
+        "count": 5,
+        "min": 101.52,
+        "avg": 114.54,
+        "p50": 117.58,
+        "p90": 125.28,
+        "p95": 125.28,
+        "p99": 125.28,
+        "max": 125.28
+      },
+      "messageAckLatencyMs": {
+        "count": 145,
+        "min": 72.52,
+        "avg": 96.46,
+        "p50": 92.96,
+        "p90": 99.02,
+        "p95": 106.93,
+        "p99": 351.65,
+        "max": 382.06
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 725,
+        "min": 72.34,
+        "avg": 96.29,
+        "p50": 92.72,
+        "p90": 98.88,
+        "p95": 106.82,
+        "p99": 351.64,
+        "max": 382.04
+      },
+      "messageAcksPerSecond": 2.42
+    },
+    {
+      "scenario": "shared-room",
+      "stage": 2,
+      "concurrentUsers": 20,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 15,
+        "connectFailure": 0,
+        "loginSuccess": 15,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 579,
+        "messageAckFailure": 0,
+        "messageDeliveries": 11580
+      },
+      "connectionLatencyMs": {
+        "count": 15,
+        "min": 13.37,
+        "avg": 14.56,
+        "p50": 14.17,
+        "p90": 16.73,
+        "p95": 17.65,
+        "p99": 17.65,
+        "max": 17.65
+      },
+      "loginLatencyMs": {
+        "count": 15,
+        "min": 104.95,
+        "avg": 242.71,
+        "p50": 229.09,
+        "p90": 452.51,
+        "p95": 463.99,
+        "p99": 463.99,
+        "max": 463.99
+      },
+      "messageAckLatencyMs": {
+        "count": 579,
+        "min": 71.35,
+        "avg": 99.72,
+        "p50": 91.92,
+        "p90": 106.71,
+        "p95": 133.64,
+        "p99": 351.38,
+        "max": 428.1
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 11580,
+        "min": 71,
+        "avg": 99.36,
+        "p50": 91.62,
+        "p90": 106.44,
+        "p95": 132.75,
+        "p99": 351.07,
+        "max": 428.02
+      },
+      "messageAcksPerSecond": 9.65
+    },
+    {
+      "scenario": "shared-room",
+      "stage": 3,
+      "concurrentUsers": 50,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 30,
+        "connectFailure": 0,
+        "loginSuccess": 30,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 1432,
+        "messageAckFailure": 0,
+        "messageDeliveries": 71570
+      },
+      "connectionLatencyMs": {
+        "count": 30,
+        "min": 4.22,
+        "avg": 17.9,
+        "p50": 19.27,
+        "p90": 21.01,
+        "p95": 21.42,
+        "p99": 30.74,
+        "max": 30.74
+      },
+      "loginLatencyMs": {
+        "count": 30,
+        "min": 101.94,
+        "avg": 279.28,
+        "p50": 258.82,
+        "p90": 467.51,
+        "p95": 595.04,
+        "p99": 598.26,
+        "max": 598.26
+      },
+      "messageAckLatencyMs": {
+        "count": 1432,
+        "min": 72.39,
+        "avg": 121.46,
+        "p50": 93.48,
+        "p90": 174.71,
+        "p95": 326.17,
+        "p99": 751.38,
+        "max": 1163.55
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 12000,
+        "min": 72.91,
+        "avg": 170.97,
+        "p50": 108.62,
+        "p90": 227.33,
+        "p95": 751.05,
+        "p99": 943.63,
+        "max": 1163.16
+      },
+      "messageAcksPerSecond": 23.87
+    },
+    {
+      "scenario": "shared-room",
+      "stage": 4,
+      "concurrentUsers": 100,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 50,
+        "connectFailure": 0,
+        "loginSuccess": 50,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 2219,
+        "messageAckFailure": 0,
+        "messageDeliveries": 221900
+      },
+      "connectionLatencyMs": {
+        "count": 50,
+        "min": 20.3,
+        "avg": 22.76,
+        "p50": 22.01,
+        "p90": 26.81,
+        "p95": 27.15,
+        "p99": 29.97,
+        "max": 29.97
+      },
+      "loginLatencyMs": {
+        "count": 50,
+        "min": 104.79,
+        "avg": 300.02,
+        "p50": 307,
+        "p90": 477.57,
+        "p95": 482.71,
+        "p99": 539.26,
+        "max": 539.26
+      },
+      "messageAckLatencyMs": {
+        "count": 2219,
+        "min": 77.66,
+        "avg": 717.15,
+        "p50": 919.67,
+        "p90": 997.9,
+        "p95": 1080.19,
+        "p99": 2106.73,
+        "max": 2239.37
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 12000,
+        "min": 75.77,
+        "avg": 1228.75,
+        "p50": 1233.24,
+        "p90": 2109.78,
+        "p95": 2133.33,
+        "p99": 2207.08,
+        "max": 2238.94
+      },
+      "messageAcksPerSecond": 36.98
+    },
+    {
+      "scenario": "shared-room",
+      "stage": 5,
+      "concurrentUsers": 250,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 150,
+        "connectFailure": 0,
+        "loginSuccess": 150,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 2649,
+        "messageAckFailure": 0,
+        "messageDeliveries": 658513
+      },
+      "connectionLatencyMs": {
+        "count": 150,
+        "min": 14.48,
+        "avg": 19.39,
+        "p50": 19.47,
+        "p90": 22.38,
+        "p95": 25.85,
+        "p99": 29.52,
+        "max": 29.88
+      },
+      "loginLatencyMs": {
+        "count": 150,
+        "min": 107.9,
+        "avg": 447.24,
+        "p50": 428.27,
+        "p90": 714.86,
+        "p95": 791.97,
+        "p99": 873.97,
+        "max": 925.73
+      },
+      "messageAckLatencyMs": {
+        "count": 2649,
+        "min": 906.22,
+        "avg": 3600.11,
+        "p50": 3198.99,
+        "p90": 4919.17,
+        "p95": 5184.11,
+        "p99": 6095.08,
+        "max": 7819.51
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 12000,
+        "min": 904.02,
+        "avg": 3184.96,
+        "p50": 3027.06,
+        "p90": 3997.44,
+        "p95": 4873.55,
+        "p99": 5989.79,
+        "max": 7815.39
+      },
+      "messageAcksPerSecond": 44.15
+    },
+    {
+      "scenario": "separate-rooms",
+      "stage": 1,
+      "concurrentUsers": 5,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 0,
+        "connectFailure": 0,
+        "loginSuccess": 0,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 145,
+        "messageAckFailure": 0,
+        "messageDeliveries": 145
+      },
+      "connectionLatencyMs": {
+        "count": 5,
+        "min": 1.85,
+        "avg": 24.13,
+        "p50": 2.06,
+        "p90": 112.45,
+        "p95": 112.45,
+        "p99": 112.45,
+        "max": 112.45
+      },
+      "loginLatencyMs": {
+        "count": 5,
+        "min": 107.51,
+        "avg": 119.65,
+        "p50": 121.14,
+        "p90": 130.79,
+        "p95": 130.79,
+        "p99": 130.79,
+        "max": 130.79
+      },
+      "messageAckLatencyMs": {
+        "count": 145,
+        "min": 71.37,
+        "avg": 91.62,
+        "p50": 89.01,
+        "p90": 98.92,
+        "p95": 124.94,
+        "p99": 219.87,
+        "max": 234
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 145,
+        "min": 71.22,
+        "avg": 91.48,
+        "p50": 88.91,
+        "p90": 98.41,
+        "p95": 124.89,
+        "p99": 219.56,
+        "max": 233.98
+      },
+      "messageAcksPerSecond": 2.42
+    },
+    {
+      "scenario": "separate-rooms",
+      "stage": 2,
+      "concurrentUsers": 20,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 15,
+        "connectFailure": 0,
+        "loginSuccess": 15,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 580,
+        "messageAckFailure": 0,
+        "messageDeliveries": 2320
+      },
+      "connectionLatencyMs": {
+        "count": 15,
+        "min": 26.7,
+        "avg": 28.25,
+        "p50": 28.53,
+        "p90": 29.15,
+        "p95": 29.28,
+        "p99": 29.28,
+        "max": 29.28
+      },
+      "loginLatencyMs": {
+        "count": 15,
+        "min": 104.65,
+        "avg": 202.69,
+        "p50": 178.64,
+        "p90": 309.97,
+        "p95": 311.06,
+        "p99": 311.06,
+        "max": 311.06
+      },
+      "messageAckLatencyMs": {
+        "count": 580,
+        "min": 70.42,
+        "avg": 103.23,
+        "p50": 95.25,
+        "p90": 111.76,
+        "p95": 190.39,
+        "p99": 220.81,
+        "max": 466.73
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 2320,
+        "min": 70.28,
+        "avg": 103.13,
+        "p50": 95.19,
+        "p90": 111.74,
+        "p95": 190.38,
+        "p99": 220.5,
+        "max": 466.71
+      },
+      "messageAcksPerSecond": 9.67
+    },
+    {
+      "scenario": "separate-rooms",
+      "stage": 3,
+      "concurrentUsers": 50,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 30,
+        "connectFailure": 0,
+        "loginSuccess": 30,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 1430,
+        "messageAckFailure": 0,
+        "messageDeliveries": 14300
+      },
+      "connectionLatencyMs": {
+        "count": 30,
+        "min": 7.58,
+        "avg": 19.58,
+        "p50": 21.22,
+        "p90": 24,
+        "p95": 24.35,
+        "p99": 25.25,
+        "max": 25.25
+      },
+      "loginLatencyMs": {
+        "count": 30,
+        "min": 102.74,
+        "avg": 259.48,
+        "p50": 241.03,
+        "p90": 444.92,
+        "p95": 456.39,
+        "p99": 507.8,
+        "max": 507.8
+      },
+      "messageAckLatencyMs": {
+        "count": 1430,
+        "min": 69.99,
+        "avg": 117.88,
+        "p50": 95.84,
+        "p90": 138.53,
+        "p95": 209.52,
+        "p99": 891.99,
+        "max": 942.77
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 12000,
+        "min": 69.87,
+        "avg": 115.91,
+        "p50": 95.38,
+        "p90": 121.33,
+        "p95": 192.62,
+        "p99": 923.47,
+        "max": 942.57
+      },
+      "messageAcksPerSecond": 23.83
+    },
+    {
+      "scenario": "separate-rooms",
+      "stage": 4,
+      "concurrentUsers": 100,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 50,
+        "connectFailure": 0,
+        "loginSuccess": 50,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 2211,
+        "messageAckFailure": 0,
+        "messageDeliveries": 44220
+      },
+      "connectionLatencyMs": {
+        "count": 50,
+        "min": 16.69,
+        "avg": 23.24,
+        "p50": 23.19,
+        "p90": 32.57,
+        "p95": 33.88,
+        "p99": 34.14,
+        "max": 34.14
+      },
+      "loginLatencyMs": {
+        "count": 50,
+        "min": 133.1,
+        "avg": 315.77,
+        "p50": 334.82,
+        "p90": 478.56,
+        "p95": 490.54,
+        "p99": 542.74,
+        "max": 542.74
+      },
+      "messageAckLatencyMs": {
+        "count": 2211,
+        "min": 70.87,
+        "avg": 727.8,
+        "p50": 933.9,
+        "p90": 1078.39,
+        "p95": 1197.69,
+        "p99": 1975.64,
+        "max": 2167.67
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 12000,
+        "min": 78.12,
+        "avg": 899.84,
+        "p50": 1018.53,
+        "p90": 1265.19,
+        "p95": 1957.36,
+        "p99": 2029.66,
+        "max": 2167.64
+      },
+      "messageAcksPerSecond": 36.85
+    },
+    {
+      "scenario": "separate-rooms",
+      "stage": 5,
+      "concurrentUsers": 250,
+      "durationSeconds": 60,
+      "counters": {
+        "connectSuccess": 150,
+        "connectFailure": 0,
+        "loginSuccess": 150,
+        "loginFailure": 0,
+        "roomJoinFailure": 0,
+        "messageAckSuccess": 2971,
+        "messageAckFailure": 0,
+        "messageDeliveries": 147574
+      },
+      "connectionLatencyMs": {
+        "count": 150,
+        "min": 12.55,
+        "avg": 21.08,
+        "p50": 22.83,
+        "p90": 26.34,
+        "p95": 26.5,
+        "p99": 28.38,
+        "max": 28.7
+      },
+      "loginLatencyMs": {
+        "count": 150,
+        "min": 100.4,
+        "avg": 458.29,
+        "p50": 450.04,
+        "p90": 751.49,
+        "p95": 806.14,
+        "p99": 890.51,
+        "max": 932.62
+      },
+      "messageAckLatencyMs": {
+        "count": 2971,
+        "min": 919.37,
+        "avg": 3030.51,
+        "p50": 3003,
+        "p90": 3909.8,
+        "p95": 3960.97,
+        "p99": 4890.87,
+        "max": 4923.05
+      },
+      "messageDeliveryLatencyMs": {
+        "count": 12000,
+        "min": 918.67,
+        "avg": 3513.28,
+        "p50": 3877.32,
+        "p90": 4856.5,
+        "p95": 4878.51,
+        "p99": 4893.33,
+        "max": 4918.98
+      },
+      "messageAcksPerSecond": 49.52
+    }
+  ]
+}

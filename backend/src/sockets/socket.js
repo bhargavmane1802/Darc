@@ -90,11 +90,7 @@ export const requireSocketAuth = (socket) => {
 export const handleJoinRoom = ({ MessageModel = message_Model, redisClient = redis } = {}) =>
     async ({ room_id }, socket, io) => {
         try {
-            // Guard: if the socket is already in this room, do not re-join.
-            // Re-joining causes Socket.IO to deliver subsequent io.to(room_id).emit()
-            // calls multiple times to the same client, breaking the member count display.
-            if (socket.rooms.has(room_id)) return;
-
+            if (socket.rooms.has(room_id)) return;//if socket already consist of room named room_id ,
             socket.join(room_id);
 
             const roomKey = `room:${room_id}:presence`;
@@ -109,14 +105,24 @@ export const handleJoinRoom = ({ MessageModel = message_Model, redisClient = red
 
             io.to(room_id).emit("room_members", { room_id, members: members[1] });
 
-            // 3. Fetch History
+            // 3. Fetch History (30 most recent messages, plus 1 to determine hasMore)
+            const fetchLimit = 30;
             const history = await MessageModel.find({ room: room_id })
-                .sort({ createdAt: -1 })
-                .limit(30)
+                .sort({ createdAt: -1, _id: -1 })
+                .limit(fetchLimit + 1)
                 .populate("sender", "username imageUrl avatar")
                 .lean(); // as it is read only
 
-            socket.emit("message_display", history.reverse());
+            const hasMore = history.length > fetchLimit;
+            const rawMessages = hasMore ? history.slice(0, fetchLimit) : history;
+            const initialMessages = rawMessages.reverse();
+
+            socket.emit("message_display", {
+                messages: initialMessages,
+                message: initialMessages,
+                hasMore,
+                roomId: room_id,
+            });
         } catch (err) {
             console.error("Join Room Error:", err);
             socket.emit("error", { message: "Failed to join room properly." });
@@ -136,6 +142,7 @@ export const handleSwitchRoom = ({ redisClient = redis } = {}) =>
                 .exec();
 
             // Actually leave the socket room so no more events are received from it
+            //temporary later it will recice a notification through push notification .
             socket.leave(room_id);
 
             // Broadcast updated member list to EVERYONE remaining in the old room

@@ -277,11 +277,37 @@
 .chat-panel__messages {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   background: var(--bg-base);
+}
+
+.chat-panel__history-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-bottom: 1px dashed var(--border);
+  text-align: center;
+  user-select: none;
+  opacity: 0.85;
+}
+
+.chat-panel__loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  user-select: none;
 }
 
 /* ---- Chat Bubbles ---- */
