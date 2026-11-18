@@ -6,8 +6,8 @@ import process from "node:process";
 import "dotenv/config";
 
 const URL = process.env.BENCH_URL || "http://localhost:8080";
-const PASSWORD = "3388Mane@";
-const USERNAMES = (process.env.BENCH_USERS || "testuser1,testuser2,bhargav,saksham,bhargavmane")
+const PASSWORD = process.env.BENCH_PASSWORD;
+const USERNAMES = (process.env.BENCH_USERS )
   .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 const STAGES = [5, 20, 50, 100, 250];
 const STAGE_MS = Number(process.env.BENCH_STAGE_MS || 60_000);

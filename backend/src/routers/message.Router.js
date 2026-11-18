@@ -1,9 +1,5 @@
 import { Router } from "express";
 import { 
-    messageCreate, 
-    messageUpdate, 
-    messageDelete, 
-    messageDisplay,
     messageCreateSocket,
     messageUpdateSocket,
     messageDeleteSocket,
@@ -12,6 +8,26 @@ import {
 } from "../controllers/message.controller.js";
 import { verifyRoom, checkSocketRoomMember } from "../middlewares/roomMember.middlware.js";
 import upload from "../config/cloudinary.js";
+import message_Model from "../model/message.model.js";
+import redisClient from "../config/redis.js";
+
+import { getIO } from "../sockets/socketInstance.js";
+// Create the Redis-enabled message display handler once.
+const messageDisplayHandler = messageDisplaySocket({
+    message_Model,
+    redis: redisClient,
+    paginationSecret: process.env.MESSAGE_CURSOR_SECRET
+});
+const messageCreateHandler = messageCreateSocket({
+    MessageModel: message_Model,
+    redis: redisClient,
+    getSocketIO: () => getIO(),
+});
+const messageUpdateHandler = messageUpdateSocket({
+    MessageModel: message_Model,
+    getSocketIO: () => getIO(),
+    redis: redisClient
+});
 
 const messageRoutes = Router();
 // HTTP Routes (commented out in favor of Socket.IO routes)
@@ -58,7 +74,12 @@ export const messageCreateRoute = async (data = {}, socket, io, callback) => {
             return;
         }
 
-        return await messageCreateSocket()(data, socket, io, callback);
+        return await await messageCreateHandler(
+            data,
+            socket,
+            io,
+            callback
+        );
     } catch (err) {
         console.error("messageCreateRoute error:", err);
         if (typeof callback === "function") callback({ status: 500, message: err.message });
@@ -82,7 +103,12 @@ export const messageUpdateRoute = async (data = {}, socket, io, callback) => {
             return;
         }
 
-        return await messageUpdateSocket()(data, socket, io, callback);
+        return await messageUpdateHandler(
+            data,
+            socket,
+            io,
+            callback
+        );
     } catch (err) {
         console.error("messageUpdateRoute error:", err);
         if (typeof callback === "function") callback({ status: 500, message: err.message });
@@ -118,25 +144,97 @@ export const messageDeleteRoute = async (data = {}, socket, io, callback) => {
  * Socket Route: Equivalent to GET /:roomId/display/
  * Middleware: verifyRoom
  */
-export const messageDisplayRoute = async (data = {}, socket, io, callback) => {
-    try {
-        const roomId = typeof data === "string" ? data : (data?.roomId || data?.room_id || data?.room);
-        const userId = socket?.user?.id || socket?.user?._id || data?.id || data?.userId;
 
-        const authCheck = await checkSocketRoomMember(roomId, userId);
-        if (!authCheck.authorized) {
-            if (typeof callback === "function") callback({ status: authCheck.status, message: authCheck.message });
-            socket?.emit("error", { message: authCheck.message, status: authCheck.status });
-            return;
+export const messageDisplayRoute = async (
+    data = {},
+    socket,
+    io,
+    callback
+) => {
+    try {
+        const roomId = typeof data === "string"
+            ? data
+            : (
+                data?.roomId ||
+                data?.room_id ||
+                data?.room
+            );
+
+        // Use the authenticated socket user.
+        // Do not trust a user ID supplied by the client.
+        const userId =
+            socket?.user?.id ||
+            socket?.user?._id;
+
+        if (!roomId) {
+            const response = {
+                status: 400,
+                message: "roomId is required"
+            };
+
+            if (typeof callback === "function") {
+                return callback(response);
+            }
+
+            return socket?.emit("error", response);
         }
 
-        return await messageDisplaySocket()(data, socket, io, callback);
+        if (!userId) {
+            const response = {
+                status: 401,
+                message: "Authentication required"
+            };
+
+            if (typeof callback === "function") {
+                return callback(response);
+            }
+
+            return socket?.emit("error", response);
+        }
+
+        // Keep your existing room-membership authorization.
+        const authCheck = await checkSocketRoomMember(
+            roomId,
+            userId
+        );
+
+        if (!authCheck.authorized) {
+            const response = {
+                status: authCheck.status,
+                message: authCheck.message
+            };
+
+            if (typeof callback === "function") {
+                return callback(response);
+            }
+
+            return socket?.emit("error", response);
+        }
+
+        // Use the already-created Redis-enabled handler.
+        return await messageDisplayHandler(
+            data,
+            socket,
+            io,
+            callback
+        );
+
     } catch (err) {
         console.error("messageDisplayRoute error:", err);
-        if (typeof callback === "function") callback({ status: 500, message: err.message });
-        socket?.emit("error", { message: err.message });
+
+        const response = {
+            status: 500,
+            message: "Failed to display messages"
+        };
+
+        if (typeof callback === "function") {
+            return callback(response);
+        }
+
+        socket?.emit("error", response);
     }
 };
+
 
 /**
  * Socket Route: Equivalent to messageRead

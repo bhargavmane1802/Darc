@@ -6,7 +6,13 @@ function decodeJWT(token) {
   try {
     const payload = token.split('.')[1];
     const decoded = JSON.parse(atob(payload));
-    return { id: decoded.id, username: decoded.username };
+    const resolvedImage = decoded.imageUrl || decoded.avatar || null;
+    return {
+      id: decoded.id,
+      username: decoded.username,
+      imageUrl: resolvedImage,
+      avatar: resolvedImage,
+    };
   } catch {
     return null;
   }

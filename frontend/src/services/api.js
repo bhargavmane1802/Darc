@@ -69,7 +69,11 @@ export const apiUpdateProfileAvatar = async (file) => {
   }
 
   const res = await socketRequest('profile:avatar', { imageUrl, publicId });
-  return res?.data !== undefined ? res.data : res;
+  const data = res?.data !== undefined ? res.data : res;
+  if (data?.token) {
+    updateSocketAuth(data.token);
+  }
+  return data;
 };
 
 // Rooms
@@ -94,19 +98,46 @@ export const apiGetMyRooms = async () => {
 };
 
 // Messages
-export const apiGetMessages = async (roomId, before = null, limit = 30) => {
+export const MESSAGE_INITIAL_LIMIT = 60;
+export const RECENT_MESSAGE_LIMIT = 100;
+
+export const apiGetMessages = (roomId, optionsOrLimit = MESSAGE_INITIAL_LIMIT, callback = null) => {
+  let cb = typeof callback === 'function' ? callback : null;
+  let lim = MESSAGE_INITIAL_LIMIT;
+
+  if (typeof optionsOrLimit === 'function') {
+    cb = optionsOrLimit;
+  } else if (typeof optionsOrLimit === 'number' && Number.isFinite(optionsOrLimit)) {
+    lim = Math.min(Math.max(Math.trunc(optionsOrLimit), 1), RECENT_MESSAGE_LIMIT);
+  } else if (optionsOrLimit && typeof optionsOrLimit === 'object') {
+    const parsedLimit = parseInt(optionsOrLimit.limit, 10);
+    if (Number.isFinite(parsedLimit)) {
+      lim = Math.min(Math.max(parsedLimit, 1), RECENT_MESSAGE_LIMIT);
+    }
+    if (typeof optionsOrLimit.callback === 'function') {
+      cb = optionsOrLimit.callback;
+    }
+  }
+
   const payload = {
     roomId,
-    room_id: roomId,
-    limit,
+    limit: lim,
   };
-  if (before) {
-    payload.before = before;
-    payload.offset = before;
-    payload.lastMessageId = before;
+
+  const promise = socketRequest('message:display', payload);
+  if (cb) {
+    promise
+      .then((res) => cb(res))
+      .catch((err) => cb(err.response || { status: err.status || 500, message: err.message, messages: [] }));
   }
-  const res = await socketRequest('message:display', payload);
-  return res;
+  return promise;
+};
+
+export const emitMessageDisplay = (roomId, limit = MESSAGE_INITIAL_LIMIT, callback = null) => {
+  if (typeof limit === 'function') {
+    return apiGetMessages(roomId, MESSAGE_INITIAL_LIMIT, limit);
+  }
+  return apiGetMessages(roomId, limit, callback);
 };
 
 export const apiSendMessage = async (roomId, contentOrData, maybeImage) => {
@@ -146,13 +177,18 @@ export const apiSendMessage = async (roomId, contentOrData, maybeImage) => {
   return res;
 };
 
-export const apiUpdateMessage = (roomId, messageId, content) =>
-  socketRequest('message:update', {
+export const apiUpdateMessage = (roomId, messageId, content, type) => {
+  const payload = {
     roomId,
     room_id: roomId,
     messageId,
     content: typeof content === 'string' ? content.trim() : content,
-  });
+  };
+  if (typeof type === 'string' && type.trim()) {
+    payload.type = type.trim();
+  }
+  return socketRequest('message:update', payload);
+};
 
 export const apiDeleteMessage = (roomId, messageId) =>
   socketRequest('message:delete', {

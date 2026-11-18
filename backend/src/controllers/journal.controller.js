@@ -1,6 +1,6 @@
 import room_Model from "../model/room.model.js";
 import journal_Model from "../model/journal.model.js";
-import {getIO} from "../sockets/socket.js"
+import { getIO } from "../sockets/socketInstance.js";
 import { generateEmbeddings as generateEmbeddingsFactory, getAIFeedback as getAIFeedbackFactory } from "../services/ai.service.js";
 const _getAIFeedback = getAIFeedbackFactory();
 const _generateEmbeddings = generateEmbeddingsFactory();

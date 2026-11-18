@@ -1,5 +1,6 @@
 // src/socket.js
 import { Server } from "socket.io";
+import { setIO } from "./socketInstance.js";
 import jwt from "jsonwebtoken";
 import message_Model from "../model/message.model.js";
 import room_Model from "../model/room.model.js";
@@ -14,7 +15,6 @@ import { registerJournalSocketRoutes } from "../routers/journal.Router.js";
 import { registerMessageSocketRoutes } from "../routers/message.Router.js";
 import { registerUploadSocketRoutes } from "../routers/upload.routes.js";
 
-let io;
 
 /**
  * Connection-level authentication middleware (equivalent to handshake auth).
@@ -281,7 +281,14 @@ export const handleDisconnecting = ({ redisClient = redis } = {}) =>
  *   5. Core Real-time Room & Messaging handlers
  */
 export const initSocket = (server) => {
-    io = new Server(server, { cors: { origin: process.env.FRONTEND_URL || "*", methods: ["GET", "POST"] } });
+    const io = new Server(server, {
+        cors: {
+            origin: process.env.FRONTEND_URL || "*",
+            methods: ["GET", "POST"]
+        }
+    });
+
+    setIO(io);
 
     // Step 1: Handshake Authentication Middleware
     io.use(socketAuthMiddleware());

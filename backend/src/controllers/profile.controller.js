@@ -1,5 +1,6 @@
 import { deleteImage } from "../config/cloudinary.js";
 import { user_Model } from "../model/user.model.js";
+import jwt from "jsonwebtoken";
 
 export const profileDetails=async (req,res,next)=>{
     const {id}=req.user;
@@ -91,6 +92,11 @@ const profileDetailsSocket = (...args) => {
             const resolvedImage = profile.imageUrl || profile.avatar || null;
             profile.imageUrl = resolvedImage;
             profile.avatar = resolvedImage;
+
+            if (socket?.user) {
+                socket.user.imageUrl = resolvedImage;
+                socket.user.avatar = resolvedImage;
+            }
 
             if (typeof callback === "function") {
                 callback({ status: 200, data: profile });
@@ -224,7 +230,28 @@ const updateProfileAvatarSocket = (...args) => {
                 }
             }
 
-            const result = { imageUrl, avatar: imageUrl };
+            if (socket?.user) {
+                socket.user.imageUrl = imageUrl;
+                socket.user.avatar = imageUrl;
+            }
+
+            let token;
+            if (process.env.Jwt_Key && socket?.user?.username) {
+                token = jwt.sign(
+                    {
+                        id,
+                        username: socket.user.username,
+                        imageUrl,
+                        avatar: imageUrl,
+                    },
+                    process.env.Jwt_Key,
+                    { expiresIn: "1h" }
+                );
+            }
+
+            const result = token
+                ? { imageUrl, avatar: imageUrl, token }
+                : { imageUrl, avatar: imageUrl };
 
             if (typeof callback === "function") {
                 callback({ status: 200, data: result });

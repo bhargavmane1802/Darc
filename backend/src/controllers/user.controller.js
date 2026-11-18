@@ -19,7 +19,8 @@ const login = (UserModel = user_Model, jwtLib = jwt, bcryptLib = bcrypt) =>
             }
             const match = await bcryptLib.compare(password, user.password);
             if (!match) return res.status(401).json({message:"Incorrect credentials"});
-            const token = jwtLib.sign({ id: user._id, username: user.username }, process.env.Jwt_Key, { expiresIn: '1h' });
+            const resolvedImage = user.imageUrl || user.avatar || null;
+            const token = jwtLib.sign({ id: user._id, username: user.username, imageUrl: resolvedImage, avatar: resolvedImage }, process.env.Jwt_Key, { expiresIn: '1h' });
             res.status(200).json({ token });
         }
         catch (e) {
@@ -207,19 +208,20 @@ const loginSocket = (...args) => {
                 return;
             }
 
+            const resolvedImage = user.imageUrl || user.avatar || null;
             const token = jwtLib.sign(
-                { id: user._id, username: user.username },
+                { id: user._id, username: user.username, imageUrl: resolvedImage, avatar: resolvedImage },
                 process.env.Jwt_Key,
                 { expiresIn: '1h' }
             );
 
             if (socket) {
-                socket.user = { id: user._id, username: user.username };
+                socket.user = { id: user._id, username: user.username, imageUrl: resolvedImage, avatar: resolvedImage };
             }
 
             const response = {
                 token,
-                user: { id: user._id, username: user.username, email: user.email },
+                user: { id: user._id, username: user.username, email: user.email, imageUrl: resolvedImage, avatar: resolvedImage },
             };
 
             if (typeof callback === "function") {
