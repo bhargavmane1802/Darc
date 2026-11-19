@@ -14,6 +14,7 @@ import { registerRoomSocketRoutes } from "../routers/room.Router.js";
 import { registerJournalSocketRoutes } from "../routers/journal.Router.js";
 import { registerMessageSocketRoutes } from "../routers/message.Router.js";
 import { registerUploadSocketRoutes } from "../routers/upload.routes.js";
+import { invalidateSocketRoomMembership } from "../middlewares/roomMember.middlware.js";
 
 
 /**
@@ -159,6 +160,7 @@ export const handleLeaveRoom = ({ RoomModel = room_Model, redisClient = redis } 
                 { _id: room_id },
                 { $pull: { members: socket.user.id } }
             );
+            invalidateSocketRoomMembership(room_id, socket.user.id, socket);
             socket.leave(room_id);
             const roomKey = `room:${room_id}:presence`;
             const [, members] = await redisClient

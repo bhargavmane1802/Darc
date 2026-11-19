@@ -28,3 +28,4 @@ socket-connect.yml
 Dockerfile
 dockerIgnore
 darc.yml
+benchmark-results

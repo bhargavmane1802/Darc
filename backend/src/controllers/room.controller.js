@@ -1,5 +1,6 @@
 import room_Model from "../model/room.model.js";
 import { nanoid } from "nanoid";
+import { invalidateRoomMembershipCache } from "../middlewares/roomMember.middlware.js";
 
 const create = (RoomModel = room_Model, generateId = nanoid) =>
     async (req, res, next) => {
@@ -57,6 +58,7 @@ const remove = (RoomModel = room_Model) =>
             const match_room = await RoomModel.findOne({ name: name, owner: id });
             if (!match_room) return res.status(403).json({ message: "unauthorized" });
             await RoomModel.deleteOne({ _id: match_room._id });
+            invalidateRoomMembershipCache(match_room._id.toString());
             return res.status(200).json({ message: "room deleted sucessfully" });
         }
         catch (err) {
@@ -305,6 +307,7 @@ const removeRoomSocket = (...args) => {
             await RoomModel.deleteOne({ _id: match_room._id });
 
             const roomIdStr = match_room._id.toString();
+            invalidateRoomMembershipCache(roomIdStr, socket);
             if (io) {
                 io.to(roomIdStr).emit("room_deleted", { room_id: match_room._id, name });
             } else {

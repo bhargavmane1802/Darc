@@ -3,6 +3,48 @@ import message_Model from "../model/message.model.js";
 import { getIO } from "../sockets/socketInstance.js";
 import crypto  from "crypto";
 import { randomUUID } from "node:crypto";
+import {
+    recordCacheHit,
+    recordCacheMiss,
+    recordCacheFallback,
+    recordCacheWrite,
+    recordCacheError,
+} from "../utils/benchMetrics.js";
+
+// =============================================
+// REDIS CLIENT ADAPTER (ioredis v5 + node-redis v4)
+// =============================================
+
+const isRedisReady = (redis) => {
+    if (!redis) return false;
+    if (redis.status === "ready") return true;
+    if (redis.isReady === true) return true;
+    return false;
+};
+
+const isIoRedisClient = (redis) =>
+    typeof redis?.zscore === "function" || typeof redis?.status === "string";
+
+const redisEval = async (redis, script, keys, args) => {
+    if (isIoRedisClient(redis)) {
+        return redis.eval(script, keys.length, ...keys, ...args);
+    }
+    return redis.eval(script, { keys, arguments: args });
+};
+
+const redisSetLock = async (redis, key, value, ttlSeconds) => {
+    if (isIoRedisClient(redis)) {
+        return redis.set(key, value, "EX", ttlSeconds, "NX");
+    }
+    return redis.set(key, value, { NX: true, EX: ttlSeconds });
+};
+
+const redisDel = async (redis, keys) => {
+    if (isIoRedisClient(redis)) {
+        return redis.del(...keys);
+    }
+    return redis.del(keys);
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Socket.IO Equivalent Handlers
@@ -156,11 +198,8 @@ const messageCreateSocket = (...args) => {
                     responseMessage
                 );
 
-                if (!cached && redis?.isReady) {
-                    console.warn(
-                        "Recent message cache was not initialized for room:",
-                        roomId
-                    );
+                if (!cached && isRedisReady(redis)) {
+                    // Cache not yet initialized for this room; will populate on first display.
                 }
 
             } catch (redisError) {
@@ -270,7 +309,8 @@ const updateMessageInRecentCache = async (
     message
 ) => {
 
-    if (!redis || !redis.isReady) {
+    if (!isRedisReady(redis)) {
+        recordCacheWrite("skipped");
         return false;
     }
 
@@ -284,19 +324,23 @@ const updateMessageInRecentCache = async (
             : message
     );
 
-    const result = await redis.eval(
+    const result = await redisEval(
+        redis,
         UPDATE_RECENT_MESSAGE_SCRIPT,
-        {
-            keys: [keys.index, keys.data],
-            arguments: [
-                RECENT_CACHE_MARKER,
-                messageId,
-                payload,
-                String(MESSAGE_CACHE_TTL)
-            ]
-        }
+        [keys.index, keys.data],
+        [
+            RECENT_CACHE_MARKER,
+            messageId,
+            payload,
+            String(MESSAGE_CACHE_TTL)
+        ]
     );
 
+    if (result === 1) {
+        recordCacheWrite("update");
+    } else {
+        recordCacheWrite("skipped");
+    }
     return result === 1;
 }; 
 
@@ -434,12 +478,40 @@ const messageUpdateSocket = (...args) => {
                 );
             }
 
-            // Find message belonging to this sender AND room.
-            const message = await MessageModel.findOne({
-                _id: messageId,
-                sender: userId,
-                room: roomId
-            });
+            const updateFields = {};
+            if (hasContent) {
+                updateFields.content = content;
+            }
+            if (hasType) {
+                updateFields.type = type.trim();
+            }
+
+            // Collapse findOne + save into single atomic findOneAndUpdate.
+            let message;
+            if (typeof MessageModel.findOneAndUpdate === "function") {
+                message = await MessageModel.findOneAndUpdate(
+                    {
+                        _id: messageId,
+                        sender: userId,
+                        room: roomId
+                    },
+                    { $set: updateFields },
+                    { new: true }
+                );
+            } else {
+                message = await MessageModel.findOne({
+                    _id: messageId,
+                    sender: userId,
+                    room: roomId
+                });
+                if (message) {
+                    if (hasContent) message.content = content;
+                    if (hasType) message.type = type.trim();
+                    if (typeof message.save === "function") {
+                        await message.save();
+                    }
+                }
+            }
 
             if (!message) {
                 return sendError(
@@ -447,18 +519,6 @@ const messageUpdateSocket = (...args) => {
                     "Unauthorized"
                 );
             }
-
-            // Update only supplied fields.
-            if (hasContent) {
-                message.content = content;
-            }
-
-            if (hasType) {
-                message.type = type.trim();
-            }
-
-            // 1. Save MongoDB first.
-            await message.save();
 
             // 2. Build sender payload from authenticated socket user (avoids .populate).
             const senderImage = socket?.user?.imageUrl || socket?.user?.avatar || null;
@@ -482,11 +542,8 @@ const messageUpdateSocket = (...args) => {
                     responseMessage
                 );
 
-                if (!updated && redis?.isReady) {
-                    console.log(
-                        "Message not present in recent Redis cache:",
-                        messageId
-                    );
+                if (!updated && isRedisReady(redis)) {
+                    // Message was older than the cached window or cache not initialized.
                 }
 
             } catch (redisError) {
@@ -550,19 +607,73 @@ const messageUpdateSocket = (...args) => {
  * Broadcasts: "delete_message" to room
  * Emits to sender: "message_delete_success" (or executes callback)
  */
+const DELETE_RECENT_MESSAGE_SCRIPT = `
+    local indexKey = KEYS[1]
+    local dataKey = KEYS[2]
+
+    local marker = ARGV[1]
+    local messageId = ARGV[2]
+    local ttl = tonumber(ARGV[3])
+
+    if not redis.call("ZSCORE", indexKey, marker) then
+        return 0
+    end
+
+    local removed = redis.call("ZREM", indexKey, messageId)
+    redis.call("HDEL", dataKey, messageId)
+
+    redis.call("EXPIRE", indexKey, ttl)
+    redis.call("EXPIRE", dataKey, ttl)
+
+    return removed
+`;
+
+const deleteMessageFromRecentCache = async (
+    redis,
+    roomId,
+    messageId
+) => {
+    if (!isRedisReady(redis)) {
+        recordCacheWrite("skipped");
+        return false;
+    }
+
+    const keys = getRecentMessageKeys(roomId);
+    const result = await redisEval(
+        redis,
+        DELETE_RECENT_MESSAGE_SCRIPT,
+        [keys.index, keys.data],
+        [
+            RECENT_CACHE_MARKER,
+            messageId.toString(),
+            String(MESSAGE_CACHE_TTL)
+        ]
+    );
+
+    if (result >= 1) {
+        recordCacheWrite("delete");
+    } else {
+        recordCacheWrite("skipped");
+    }
+    return result >= 1;
+};
+
 const messageDeleteSocket = (...args) => {
     if (args.length >= 2 && args[1] && typeof args[1].emit === "function") {
         return messageDeleteSocket()(args[0], args[1], args[2], args[3]);
     }
     let MessageModel = message_Model;
     let getSocketIO = getIO;
+    let redis = null;
 
     if (args.length === 1 && args[0] && typeof args[0] === "object" && !args[0].schema) {
         if (args[0].MessageModel) MessageModel = args[0].MessageModel;
         if (args[0].getSocketIO) getSocketIO = args[0].getSocketIO;
+        if (args[0].redis) redis = args[0].redis;
     } else {
         if (args[0]) MessageModel = args[0];
         if (args[1]) getSocketIO = args[1];
+        if (args[2]) redis = args[2];
     }
 
     return async (data = {}, socket, io, callback) => {
@@ -579,7 +690,20 @@ const messageDeleteSocket = (...args) => {
                 return;
             }
 
-            const message = await MessageModel.findOne({ _id: messageId, sender: id });
+            // Collapse findOne + deleteOne into single atomic findOneAndDelete.
+            let message;
+            if (typeof MessageModel.findOneAndDelete === "function") {
+                message = await MessageModel.findOneAndDelete({
+                    _id: messageId,
+                    sender: id
+                });
+            } else {
+                message = await MessageModel.findOne({ _id: messageId, sender: id });
+                if (message && typeof MessageModel.deleteOne === "function") {
+                    await MessageModel.deleteOne({ _id: messageId });
+                }
+            }
+
             if (!message) {
                 if (typeof callback === "function") {
                     return callback({ status: 403, message: "Unauthorized" });
@@ -588,7 +712,12 @@ const messageDeleteSocket = (...args) => {
                 return;
             }
 
-            await MessageModel.deleteOne({ _id: messageId });
+            try {
+                await deleteMessageFromRecentCache(redis, roomId.toString(), message._id);
+            } catch (redisError) {
+                recordCacheError();
+                console.error("Failed to remove deleted message from Redis cache:", redisError.message);
+            }
 
             const ioInstance = io || (getSocketIO ? getSocketIO() : getIO());
             ioInstance.to(roomId).emit("delete_message", message._id);
@@ -633,7 +762,8 @@ const addMessageToRecentCache = async (
     roomId,
     message
 ) => {
-    if (!redis || !redis.isReady) {
+    if (!isRedisReady(redis)) {
+        recordCacheWrite("skipped");
         return false;
     }
 
@@ -653,22 +783,26 @@ const addMessageToRecentCache = async (
             : message
     );
 
-    const result = await redis.eval(
+    const result = await redisEval(
+        redis,
         INSERT_RECENT_MESSAGE_SCRIPT,
-        {
-            keys: [keys.index, keys.data],
-            arguments: [
-                RECENT_CACHE_MARKER,
-                messageId,
-                String(score),
-                payload,
-                String(RECENT_MESSAGE_LIMIT),
-                String(MESSAGE_CACHE_TTL)
-            ]
-        }
+        [keys.index, keys.data],
+        [
+            RECENT_CACHE_MARKER,
+            messageId,
+            String(score),
+            payload,
+            String(RECENT_MESSAGE_LIMIT),
+            String(MESSAGE_CACHE_TTL)
+        ]
     );
 
     // -1 means the cache has not been initialized.
+    if (result === 1) {
+        recordCacheWrite("insert");
+    } else {
+        recordCacheWrite("skipped");
+    }
     return result === 1;
 };
 // =============================================
@@ -856,14 +990,64 @@ const initializeRecentMessageCache = async (
         );
     }
 
-    return redis.eval(
+    return redisEval(
+        redis,
         INITIALIZE_RECENT_CACHE_SCRIPT,
-        {
-            keys: [keys.index, keys.data],
-            arguments: args
-        }
+        [keys.index, keys.data],
+        args
     );
 };
+
+// =============================================
+// ATOMIC CACHE RETRIEVAL SCRIPT
+// =============================================
+
+const GET_RECENT_MESSAGES_SCRIPT = `
+    local indexKey = KEYS[1]
+    local dataKey = KEYS[2]
+
+    local marker = ARGV[1]
+    local limit = tonumber(ARGV[2])
+    local ttl = tonumber(ARGV[3])
+
+    -- Cache must be initialized.
+    if not redis.call("ZSCORE", indexKey, marker) then
+        return false
+    end
+
+    -- Fetch only up to (limit + 1) newest IDs so marker can be skipped if present.
+    local ids = redis.call("ZREVRANGE", indexKey, 0, limit)
+    local messageIds = {}
+
+    for _, id in ipairs(ids) do
+        if id ~= marker then
+            table.insert(messageIds, id)
+            if #messageIds >= limit then
+                break
+            end
+        end
+    end
+
+    if #messageIds == 0 then
+        redis.call("EXPIRE", indexKey, ttl)
+        redis.call("EXPIRE", dataKey, ttl)
+        return {}
+    end
+
+    local payloads = redis.call("HMGET", dataKey, unpack(messageIds))
+
+    for i = 1, #messageIds do
+        if not payloads[i] then
+            return redis.error_reply("ERR Recent cache inconsistency")
+        end
+    end
+
+    -- Refresh sliding expiration atomically.
+    redis.call("EXPIRE", indexKey, ttl)
+    redis.call("EXPIRE", dataKey, ttl)
+
+    return payloads
+`;
 
 // =============================================
 // CACHE RETRIEVAL
@@ -871,58 +1055,46 @@ const initializeRecentMessageCache = async (
 
 const getRecentMessagesFromCache = async (
     redis,
-    roomId
+    roomId,
+    limit = RECENT_MESSAGE_LIMIT
 ) => {
 
     const keys = getRecentMessageKeys(roomId);
-
-    const initialized = await redis.zScore(
-        keys.index,
-        RECENT_CACHE_MARKER
+    const effectiveLimit = Math.min(
+        Math.max(Number(limit) || RECENT_MESSAGE_LIMIT, 1),
+        RECENT_MESSAGE_LIMIT
     );
 
-    if (initialized === null) {
+    const payloads = await redisEval(
+        redis,
+        GET_RECENT_MESSAGES_SCRIPT,
+        [keys.index, keys.data],
+        [
+            RECENT_CACHE_MARKER,
+            String(effectiveLimit),
+            String(MESSAGE_CACHE_TTL)
+        ]
+    );
+
+    if (payloads === null || payloads === undefined) {
         return null;
     }
 
-    // Retrieve IDs newest first.
-    const ids = await redis.zRange(
-        keys.index,
-        0,
-        -1,
-        { REV: true }
-    );
-
-    const messageIds = ids
-        .filter(id => id !== RECENT_CACHE_MARKER)
-        .slice(0, RECENT_MESSAGE_LIMIT);
-
-    let messages = [];
-
-    if (messageIds.length) {
-
-        const payloads = await redis.hmGet(
-            keys.data,
-            messageIds
-        );
-
-        if (
-            payloads.length !== messageIds.length ||
-            payloads.some(payload => !payload)
-        ) {
-            throw new Error("Recent cache inconsistency");
-        }
-
-        messages = payloads.map(payload =>
-            JSON.parse(payload)
-        );
+    if (!Array.isArray(payloads)) {
+        throw new Error("Unexpected recent cache response");
     }
 
-    // Refresh sliding expiration.
-    await redis.multi()
-        .expire(keys.index, MESSAGE_CACHE_TTL)
-        .expire(keys.data, MESSAGE_CACHE_TTL)
-        .exec();
+    if (payloads.length === 0) {
+        return [];
+    }
+
+    if (payloads.some(payload => !payload)) {
+        throw new Error("Recent cache inconsistency");
+    }
+
+    const messages = payloads.map(payload =>
+        JSON.parse(payload)
+    );
 
     // Oldest to newest.
     return messages.reverse();
@@ -939,7 +1111,7 @@ const invalidateRecentMessageCache = async (
 
     const keys = getRecentMessageKeys(roomId);
 
-    await redis.del([
+    await redisDel(redis, [
         keys.index,
         keys.data
     ]);
@@ -988,11 +1160,13 @@ const RELEASE_RECENT_LOCK_SCRIPT = `
 const getLatestRoomMessages = async (
     MessageModel,
     redis,
-    roomId
+    roomId,
+    limit = RECENT_MESSAGE_LIMIT
 ) => {
 
     // Redis unavailable: MongoDB fallback.
-    if (!redis || !redis.isReady) {
+    if (!isRedisReady(redis)) {
+        recordCacheFallback();
 
         const messages = await fetchLatestRoomMessages(
             MessageModel,
@@ -1009,14 +1183,17 @@ const getLatestRoomMessages = async (
 
         const cached = await getRecentMessagesFromCache(
             redis,
-            roomId
+            roomId,
+            limit
         );
 
         if (cached !== null) {
+            recordCacheHit();
             return cached;
         }
 
     } catch (error) {
+        recordCacheError();
 
         console.error(
             "Recent message cache read error:",
@@ -1043,18 +1220,17 @@ const getLatestRoomMessages = async (
 
     try {
 
-        const result = await redis.set(
+        const result = await redisSetLock(
+            redis,
             keys.lock,
             lockToken,
-            {
-                NX: true,
-                EX: MESSAGE_LOCK_TTL
-            }
+            MESSAGE_LOCK_TTL
         );
 
         lockAcquired = result === "OK";
 
     } catch (error) {
+        recordCacheError();
 
         console.error(
             "Recent cache lock error:",
@@ -1075,14 +1251,17 @@ const getLatestRoomMessages = async (
 
                 const cached = await getRecentMessagesFromCache(
                     redis,
-                    roomId
+                    roomId,
+                    limit
                 );
 
                 if (cached !== null) {
+                    recordCacheHit();
                     return cached;
                 }
 
             } catch (error) {
+                recordCacheError();
 
                 console.error(
                     "Recent cache retry error:",
@@ -1094,6 +1273,7 @@ const getLatestRoomMessages = async (
         }
 
         // MongoDB fallback.
+        recordCacheMiss();
         const messages = await fetchLatestRoomMessages(
             MessageModel,
             roomId
@@ -1111,10 +1291,12 @@ const getLatestRoomMessages = async (
 
             cached = await getRecentMessagesFromCache(
                 redis,
-                roomId
+                roomId,
+                limit
             );
 
         } catch (error) {
+            recordCacheError();
 
             console.error(
                 "Recent cache recheck error:",
@@ -1132,10 +1314,12 @@ const getLatestRoomMessages = async (
         }
 
         if (cached !== null) {
+            recordCacheHit();
             return cached;
         }
 
         // 5. Fetch latest 100 from MongoDB.
+        recordCacheMiss();
         const messages = await fetchLatestRoomMessages(
             MessageModel,
             roomId
@@ -1149,8 +1333,10 @@ const getLatestRoomMessages = async (
                 roomId,
                 messages
             );
+            recordCacheWrite("init");
 
         } catch (error) {
+            recordCacheError();
 
             console.error(
                 "Recent cache initialization error:",
@@ -1166,12 +1352,11 @@ const getLatestRoomMessages = async (
         // 8. Release our own lock only.
         try {
 
-            await redis.eval(
+            await redisEval(
+                redis,
                 RELEASE_RECENT_LOCK_SCRIPT,
-                {
-                    keys: [keys.lock],
-                    arguments: [lockToken]
-                }
+                [keys.lock],
+                [lockToken]
             );
 
         } catch (error) {
@@ -1244,11 +1429,12 @@ const messageDisplaySocket = ({
 
             const normalizedRoomId = roomId.toString();
 
-            // Retrieve latest 100 from cache or MongoDB.
+            // Retrieve latest messages from cache (scoped to initialLimit) or MongoDB.
             const recentMessages = await getLatestRoomMessages(
                 MessageModel,
                 redis,
-                normalizedRoomId
+                normalizedRoomId,
+                initialLimit
             );
 
             // Return requested number of latest messages.
@@ -1326,8 +1512,27 @@ const messageReadSocket = (...args) => {
                 return;
             }
 
-            const message = await MessageModel.findOne({ _id: messageId });
-            if (!message) {
+            // Collapse findOne + save into single atomic updateOne with $addToSet.
+            let result;
+            if (typeof MessageModel.updateOne === "function") {
+                result = await MessageModel.updateOne(
+                    { _id: messageId, room: roomId },
+                    { $addToSet: { readBy: id } }
+                );
+            } else {
+                const msg = await MessageModel.findOne({ _id: messageId });
+                if (msg) {
+                    if (Array.isArray(msg.readBy) && !msg.readBy.includes(id)) {
+                        msg.readBy.push(id);
+                        if (typeof msg.save === "function") await msg.save();
+                    }
+                    result = { matchedCount: 1, modifiedCount: 1 };
+                } else {
+                    result = { matchedCount: 0, modifiedCount: 0 };
+                }
+            }
+
+            if (!result || (result.matchedCount ?? result.n ?? 0) === 0) {
                 if (typeof callback === "function") {
                     return callback({ status: 403, message: "the message does not exist" });
                 }
@@ -1335,13 +1540,8 @@ const messageReadSocket = (...args) => {
                 return;
             }
 
-            if (Array.isArray(message.readBy) && !message.readBy.includes(id)) {
-                message.readBy.push(id);
-                await message.save();
-            }
-
             const ioInstance = io || (getSocketIO ? getSocketIO() : getIO());
-            socket?.to(roomId).emit("readUpdate_message", {
+            socket?.to(roomId.toString()).emit("readUpdate_message", {
                 room_id: roomId,
                 user_id: id,
                 lastReadMessageId: messageId,
@@ -1350,15 +1550,19 @@ const messageReadSocket = (...args) => {
             if (typeof callback === "function") {
                 callback({ status: 200, message: "message marked as read" });
             }
-            socket?.emit("message_read_success", { message: "message marked as read", messageId });
-            return message;
+            if (typeof socket?.emit === "function") {
+                socket.emit("message_read_success", { message: "message marked as read", messageId });
+            }
+            return { _id: messageId, room: roomId, readBy: id };
         } catch (err) {
             console.log("failed to mark message read (socket):", err);
             err.message = "failed messageRead";
             if (typeof callback === "function") {
                 callback({ status: 500, message: "failed messageRead", error: err.message });
             }
-            socket?.emit("error", { message: "failed messageRead", error: err.message });
+            if (typeof socket?.emit === "function") {
+                socket.emit("error", { message: "failed messageRead", error: err.message });
+            }
         }
     };
 };
@@ -1370,6 +1574,120 @@ const handleMessageDelete = messageDeleteSocket;
 const handleMessageDisplay = messageDisplaySocket;
 const handleMessageRead = messageReadSocket;
 const handleMessageSend = messageCreateSocket;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTTP Express Handlers (for backwards compatibility & unit tests)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const messageCreate = (MessageModel = message_Model, getSocketIO = getIO) =>
+  async (req, res, next) => {
+    try {
+      const { id } = req.user;
+      const { roomId } = req.params;
+      const { content } = req.body;
+
+      const imageUrl = req.file ? req.file.path : null;
+      const textContent = content?.trim() || "";
+
+      if (!textContent && !imageUrl) {
+        return res.status(400).json({ message: "Content or image is required" });
+      }
+
+      const type = imageUrl ? (textContent ? "mixed" : "image") : "text";
+
+      const message = new MessageModel({
+        sender: id,
+        room: roomId,
+        content: textContent,
+        imageUrl: imageUrl,
+        type: type,
+      });
+
+      await message.save();
+      if (typeof message.populate === "function") {
+        await message.populate("sender", "username imageUrl avatar");
+      }
+
+      const io = getSocketIO();
+      io.to(roomId).emit("message_new", message);
+
+      return res.status(201).json({ 
+        message: "Message created successfully", 
+        data: message 
+      });
+    } catch (err) {
+      console.error("failed to create new message:", err);
+      err.message = "failed messageCreate";
+      next(err);
+    }
+  };
+
+const messageUpdate = (MessageModel = message_Model, getSocketIO = getIO) =>
+    async (req, res, next) => {
+    try {
+        const { id } = req.user;
+        const { roomId, messageId } = req.params;
+        const message = await MessageModel.findOne({ _id: messageId, sender: id });
+        if (!message) return res.status(403).json({ message: "Unauthorized" });
+        const { content, type } = req.body;
+        if (!content && !type) return res.status(404).json({ message: "Insufficent data" });
+        if (content) message.content = content;
+        if (type) message.type = type;
+        await message.save();
+        const io = getSocketIO();
+        io.to(roomId).emit("update_message", message);
+        res.status(200).json({ message: "message updated" });
+    }
+    catch (err) {
+        console.log("failed to update message");
+        err.message = "failed messageUpdate";
+        next(err);
+    }
+};
+
+const messageDelete = (MessageModel = message_Model, getSocketIO = getIO) =>
+    async (req, res, next) => {
+    try {
+        const { id } = req.user;
+        const { roomId, messageId } = req.params;
+        let message;
+        if (typeof MessageModel.findOneAndDelete === "function") {
+            message = await MessageModel.findOneAndDelete({ _id: messageId, sender: id });
+        } else {
+            message = await MessageModel.findOne({ _id: messageId, sender: id });
+            if (message && typeof MessageModel.deleteOne === "function") {
+                await MessageModel.deleteOne({ _id: messageId });
+            }
+        }
+        if (!message) return res.status(403).json({ message: "Unauthorized" });
+        const io = getSocketIO();
+        io.to(roomId).emit("delete_message", message._id);
+        res.status(200).json({ message: "message deleted" });
+    }
+    catch (err) {
+        console.log("failed to delete message");
+        err.message = "failed messageDelete";
+        next(err);
+    }
+};
+
+const messageDisplay = (MessageModel = message_Model) =>
+    async (req, res, next) => {
+    try {
+        const { roomId } = req.params;
+        let query = MessageModel.find({ room: roomId });
+        if (query && typeof query.populate === "function") {
+            query = query.populate("sender", "username imageUrl avatar");
+        }
+        const message = await query;
+        return res.status(200).json({ message });
+    }
+    catch (err) {
+        console.log("failed to display message");
+        err.message = "failed messageDisplay";
+        next(err);
+    }
+};
 
 export {
     messageCreateSocket,
@@ -1383,4 +1701,8 @@ export {
     handleMessageDisplay,
     handleMessageRead,
     handleMessageSend,
+    messageCreate,
+    messageUpdate,
+    messageDelete,
+    messageDisplay,
 };

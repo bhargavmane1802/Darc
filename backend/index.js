@@ -15,13 +15,26 @@ import './src/workers/journal.worker.js'
 import './src/workers/digest.worker.js'
 import cors from "cors";
 import { profileRoutes } from "./src/routers/profile.Router.js"
+import redis from "./src/config/redis.js";
+import {
+    initBenchMetrics,
+    attachMongoMetrics,
+    createBenchMetricsHandler,
+} from "./src/utils/benchMetrics.js";
 const app = express();
 const server = http.createServer(app);
 const io = initSocket(server);
 const port =process.env.PORT|| 8080;
+if (process.env.BENCH_METRICS_ENABLED !== "false") {
+    initBenchMetrics();
+}
 const main = async () => {
     try {
-        await mongoose.connect(process.env.Mongo_Url);
+        if (redis.status === "wait" && typeof redis.connect === "function") {
+            await redis.connect().catch((err) => console.error("Redis connect error:", err.message));
+        }
+        await mongoose.connect(process.env.Mongo_Url, { monitorCommands: true });
+        attachMongoMetrics(mongoose);
         console.log("DB connected");
         startDigestJob();
     }
@@ -75,6 +88,10 @@ app.use(
     ]
   })
 );
+
+if (process.env.BENCH_METRICS_ENABLED !== "false") {
+    app.get("/__bench/metrics", createBenchMetricsHandler({ mongoose, redis }));
+}
 
 server.listen(port, () => {
     console.log(`${port}`);

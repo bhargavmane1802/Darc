@@ -28,6 +28,11 @@ const messageUpdateHandler = messageUpdateSocket({
     getSocketIO: () => getIO(),
     redis: redisClient
 });
+const messageDeleteHandler = messageDeleteSocket({
+    MessageModel: message_Model,
+    getSocketIO: () => getIO(),
+    redis: redisClient
+});
 
 const messageRoutes = Router();
 // HTTP Routes (commented out in favor of Socket.IO routes)
@@ -67,7 +72,7 @@ export const messageCreateRoute = async (data = {}, socket, io, callback) => {
         const roomId = data?.roomId || data?.room_id || data?.room;
         const userId = socket?.user?.id || socket?.user?._id || data?.id || data?.userId || data?.sender;
 
-        const authCheck = await checkSocketRoomMember(roomId, userId);
+        const authCheck = await checkSocketRoomMember(roomId, userId, undefined, socket);
         if (!authCheck.authorized) {
             if (typeof callback === "function") callback({ status: authCheck.status, message: authCheck.message });
             socket?.emit("error", { message: authCheck.message, status: authCheck.status });
@@ -96,7 +101,7 @@ export const messageUpdateRoute = async (data = {}, socket, io, callback) => {
         const roomId = data?.roomId || data?.room_id || data?.room;
         const userId = socket?.user?.id || socket?.user?._id || data?.id || data?.userId || data?.sender;
 
-        const authCheck = await checkSocketRoomMember(roomId, userId);
+        const authCheck = await checkSocketRoomMember(roomId, userId, undefined, socket);
         if (!authCheck.authorized) {
             if (typeof callback === "function") callback({ status: authCheck.status, message: authCheck.message });
             socket?.emit("error", { message: authCheck.message, status: authCheck.status });
@@ -125,14 +130,14 @@ export const messageDeleteRoute = async (data = {}, socket, io, callback) => {
         const roomId = data?.roomId || data?.room_id || data?.room;
         const userId = socket?.user?.id || socket?.user?._id || data?.id || data?.userId || data?.sender;
 
-        const authCheck = await checkSocketRoomMember(roomId, userId);
+        const authCheck = await checkSocketRoomMember(roomId, userId, undefined, socket);
         if (!authCheck.authorized) {
             if (typeof callback === "function") callback({ status: authCheck.status, message: authCheck.message });
             socket?.emit("error", { message: authCheck.message, status: authCheck.status });
             return;
         }
 
-        return await messageDeleteSocket()(data, socket, io, callback);
+        return await messageDeleteHandler(data, socket, io, callback);
     } catch (err) {
         console.error("messageDeleteRoute error:", err);
         if (typeof callback === "function") callback({ status: 500, message: err.message });
@@ -166,36 +171,12 @@ export const messageDisplayRoute = async (
             socket?.user?.id ||
             socket?.user?._id;
 
-        if (!roomId) {
-            const response = {
-                status: 400,
-                message: "roomId is required"
-            };
-
-            if (typeof callback === "function") {
-                return callback(response);
-            }
-
-            return socket?.emit("error", response);
-        }
-
-        if (!userId) {
-            const response = {
-                status: 401,
-                message: "Authentication required"
-            };
-
-            if (typeof callback === "function") {
-                return callback(response);
-            }
-
-            return socket?.emit("error", response);
-        }
-
-        // Keep your existing room-membership authorization.
+        // Keep your existing room-membership authorization (cached per-socket with TTL).
         const authCheck = await checkSocketRoomMember(
             roomId,
-            userId
+            userId,
+            undefined,
+            socket
         );
 
         if (!authCheck.authorized) {
@@ -246,7 +227,7 @@ export const messageReadRoute = async (data = {}, socket, io, callback) => {
         const userId = socket?.user?.id || socket?.user?._id || data?.id || data?.userId;
 
         if (roomId && userId) {
-            const authCheck = await checkSocketRoomMember(roomId, userId);
+            const authCheck = await checkSocketRoomMember(roomId, userId, undefined, socket);
             if (!authCheck.authorized) {
                 if (typeof callback === "function") callback({ status: authCheck.status, message: authCheck.message });
                 socket?.emit("error", { message: authCheck.message, status: authCheck.status });
